@@ -18,11 +18,20 @@
 import { query, queryOne } from "../db.js";
 import { MOC_THEO_TRANG } from "../moc-thoi-gian.js";
 import { soQuangCaoTrongKy } from "./so-lieu-kenh.js";
+import { TY_GIA } from "../../src/lib/tien-chi.js";
 
 const NGAY_MS = 86_400_000;
 export const NGUONG_P = 0.05;
 export const NGUONG_LECH = 0.2;
 const TUOI_BAI_NGAY = 2;
+/**
+ * Hội thoại phải có chừng này ngày để chốt mới được tính tỉ lệ chốt (giống bài so ở cùng tuổi 2 ngày).
+ *
+ * Lỗi đã thấy khi rà 10/10/2026: tỉ lệ chốt 7 ngày gần tính cả hội thoại mở HÔM QUA — chưa kịp chốt đã bị coi là "không
+ * có đơn", trong khi 28 ngày nền thì đã đủ thời gian. Gần LUÔN thấp hơn nền → hệ thống báo "tụt" giả, AI điều hành đi sửa
+ * một thứ không hỏng ("lợn lành thành lợn què").
+ */
+export const TUOI_CHOT_NGAY = 2;
 
 export type MucSucKhoe = "dang_manh" | "on" | "tut" | "chua_du";
 
@@ -44,6 +53,25 @@ export interface ChiSo {
   /** Doanh thu ước mất mỗi tuần nếu tụt (₫) — để xếp ưu tiên theo tiền. null = không ước được. */
   anhHuongTuan: number | null;
 }
+
+/**
+ * CHỈ SỐ CUỐI của khối não (chủ dự án 05/10/2026): tiền bỏ ra cho mỗi đơn và doanh thu trên chi phí. Chi phí = tiền AI +
+ * tiền quảng cáo (định nghĩa "tiền tiêu" đã chốt). Tỉ số tiền / tiền không có phép thử thống kê đơn giản như tỉ lệ hay số
+ * đếm → KHÔNG chấm tốt / tụt, chỉ hiện để theo dõi và để AI điều hành biết đích cuối là gì (không tối ưu nhầm chỉ số trung
+ * gian như lượt nhấp).
+ */
+export interface ChiSoCuoi {
+  ma: "tien_moi_don" | "doanh_thu_tren_chi_phi";
+  ten: string;
+  donVi: "vnd" | "lan";
+  huong: "cao_tot" | "thap_tot";
+  gan: number | null;
+  nen: number | null;
+  /** Thành phần để soát lại: đơn, doanh thu, tiền AI (đã quy VND), tiền quảng cáo (VND). */
+  chiTiet: { gan: ThanhPhanTien; nen: ThanhPhanTien };
+  ghiChu: string[];
+}
+interface ThanhPhanTien { don: number; doanhThu: number; tienAiVnd: number; tienQcVnd: number | null }
 
 export interface SuCo {
   khau: "noi_dung" | "quang_cao" | "ban_hang" | "kenh";
@@ -180,24 +208,48 @@ export async function sucKhoeTrang(trangId: number, bayGio = new Date()) {
   const chiSo: ChiSo[] = [];
 
   // --- BÁN HÀNG ---
+  // Hội thoại MỚI mỗi ngày — khách mới tìm đến (thu hút).
   const hoiThoai = async (tu: Date, den: Date) =>
-    queryOne<{ so: number; co_don: number; nhuong: number }>(
-      `SELECT count(*)::int AS so,
-              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM orders o WHERE o.conversation_id = c.id))::int AS co_don,
-              count(*) FILTER (WHERE c.handoff_at IS NOT NULL)::int AS nhuong
-         FROM conversations c WHERE c.social_account_id = ANY($1::text[]) AND c.created_at >= $2 AND c.created_at < $3`,
+    queryOne<{ so: number }>(
+      `SELECT count(*)::int AS so FROM conversations c
+        WHERE c.social_account_id = ANY($1::text[]) AND c.created_at >= $2 AND c.created_at < $3`,
       [ids, tu, den]
     );
-  const [htGan, htNen, htGanM, htNenM] = await Promise.all([
-    hoiThoai(...w.gan), hoiThoai(...w.nen), hoiThoai(...wm.gan), hoiThoai(...wm.nen),
+  /*
+   * Tỉ lệ CHỐT / NHƯỜNG NGƯỜI tính trên LƯỢT KHÁCH NHẮN, không trên hội thoại mới tạo:
+   *   - mẫu số: hội thoại có ít nhất một tin của khách trong cửa sổ — gồm cả khách CŨ quay lại (Messenger giữ một hội
+   *     thoại mãi mãi; tính theo ngày tạo hội thoại thì lần mua thứ hai không bao giờ được đếm);
+   *   - tử số: hội thoại đó có đơn (chưa huỷ) tạo trong cửa sổ cộng thêm TUOI_CHOT_NGAY ngày để kịp chốt;
+   *   - cả hai cửa sổ (gần / nền) dời lùi TUOI_CHOT_NGAY ngày → hội thoại nào cũng đủ tuổi như nhau khi so.
+   */
+  const luotNhan = async (tu: Date, den: Date) =>
+    queryOne<{ so: number; co_don: number; nhuong: number }>(
+      `WITH ht AS (
+         SELECT DISTINCT m.conversation_id AS id FROM messages m
+          WHERE m.trang_id = $3 AND m.sender_type = 'customer' AND m.created_at >= $1 AND m.created_at < $2)
+       SELECT count(*)::int AS so,
+              count(*) FILTER (WHERE EXISTS (
+                SELECT 1 FROM orders o WHERE o.conversation_id = ht.id AND o.status <> 'cancelled'
+                   AND o.created_at >= $1 AND o.created_at < $2 + ($4 || ' days')::interval))::int AS co_don,
+              count(*) FILTER (WHERE EXISTS (
+                SELECT 1 FROM conversations c WHERE c.id = ht.id AND c.handoff_at >= $1 AND c.handoff_at < $2 + ($4 || ' days')::interval))::int AS nhuong
+         FROM ht`,
+      [tu, den, trangId, String(TUOI_CHOT_NGAY)]
+    );
+  const luiChot = (a: readonly [Date, Date]) =>
+    [new Date(a[0].getTime() - TUOI_CHOT_NGAY * NGAY_MS), new Date(a[1].getTime() - TUOI_CHOT_NGAY * NGAY_MS)] as const;
+  const [htGan, htNen, lnGanM, lnNenM, lnGan, lnNen] = await Promise.all([
+    hoiThoai(...w.gan), hoiThoai(...w.nen),
+    luotNhan(...luiChot(wm.gan)), luotNhan(...luiChot(wm.nen)),
+    luotNhan(...luiChot(w.gan)), luotNhan(...luiChot(w.nen)),
   ]);
   chiSo.push(chiSoTocDo("ban_hang", "hoi_thoai_moi", "Hội thoại mới mỗi ngày", "cao_tot", "moi_ngay",
     [htGan?.so ?? 0, 7], [htNen?.so ?? 0, w.soNgayNen]));
   // Tỉ lệ chốt dùng đơn ghi theo trang → chỉ từ mốc.
-  chiSo.push(chiSoTiLe("ban_hang", "ti_le_chot", "Tỉ lệ chốt đơn (hội thoại mới có đơn)", "cao_tot",
-    [htGanM?.co_don ?? 0, htGanM?.so ?? 0], [htNenM?.co_don ?? 0, htNenM?.so ?? 0]));
-  chiSo.push(chiSoTiLe("ban_hang", "ti_le_nhuong", "Tỉ lệ AI phải nhường người", "thap_tot",
-    [htGan?.nhuong ?? 0, htGan?.so ?? 0], [htNen?.nhuong ?? 0, htNen?.so ?? 0]));
+  chiSo.push(chiSoTiLe("ban_hang", "ti_le_chot", `Tỉ lệ chốt đơn (lượt khách nhắn có đơn trong ${TUOI_CHOT_NGAY} ngày)`, "cao_tot",
+    [lnGanM?.co_don ?? 0, lnGanM?.so ?? 0], [lnNenM?.co_don ?? 0, lnNenM?.so ?? 0]));
+  chiSo.push(chiSoTiLe("ban_hang", "ti_le_nhuong", "Tỉ lệ AI phải nhường người (trên lượt khách nhắn)", "thap_tot",
+    [lnGan?.nhuong ?? 0, lnGan?.so ?? 0], [lnNen?.nhuong ?? 0, lnNen?.so ?? 0]));
 
   const traLoi = async (tu: Date, den: Date) =>
     queryOne<{ so: number; nhanh: number }>(
@@ -248,6 +300,8 @@ export async function sucKhoeTrang(trangId: number, bayGio = new Date()) {
 
   // --- QUẢNG CÁO: số Meta theo đúng Fanpage ---
   const suCo: SuCo[] = [];
+  /** Tiền quảng cáo VND của trang ở hai cửa sổ tính theo mốc (cho chỉ số cuối). null = không đọc được / không có Fanpage. */
+  let qcCuoi: { gan: number; nen: number } | null = null;
   const fb = kenh.rows.find((k) => k.platform === "facebook" && k.connected && k.page_id);
   if (fb) {
     try {
@@ -263,6 +317,12 @@ export async function sucKhoeTrang(trangId: number, bayGio = new Date()) {
       });
       const g = cong(qGan);
       const n = cong(qNen);
+      // Chỉ số cuối tính theo cửa sổ kẹp từ mốc (wm) — cùng cửa sổ với đơn & doanh thu.
+      const [qGanM, qNenM] = await Promise.all([
+        soQuangCaoTrongKy(fb.id, fb.page_id!, ...wm.gan),
+        soQuangCaoTrongKy(fb.id, fb.page_id!, ...wm.nen),
+      ]);
+      qcCuoi = { gan: cong(qGanM).tien, nen: cong(qNenM).tien };
       chiSo.push(chiSoTiLe("quang_cao", "ti_le_nhap", "Tỉ lệ nhấp quảng cáo", "cao_tot",
         [g.nhap, g.hienThi], [n.nhap, n.hienThi], { mau: 1000, suKien: 20 }));
       // Trò chuyện trên mỗi 100.000 ₫ chi quảng cáo (tốc độ theo tiền).
@@ -299,14 +359,52 @@ export async function sucKhoeTrang(trangId: number, bayGio = new Date()) {
   const aov = donNenKhongHuy > 0 ? dtNen / donNenKhongHuy : null;
   for (const c of chiSo) {
     if (c.muc !== "tut" || aov === null) continue;
-    const htTuan = (htGan?.so ?? 0);
-    const chotNen = htNenM?.so ? (htNenM.co_don / htNenM.so) : null;
+    // Lượt khách nhắn mỗi tuần × mức chốt mất đi × giá trị đơn trung bình.
+    const htTuan = (lnGanM?.so ?? 0);
+    const chotNen = lnNenM?.so ? (lnNenM.co_don / lnNenM.so) : null;
     if (c.ma === "ti_le_chot" && c.gan.giaTri !== null && c.nen.giaTri !== null) {
       c.anhHuongTuan = Math.max(0, (c.nen.giaTri - c.gan.giaTri) * htTuan * aov);
     } else if (c.ma === "hoi_thoai_moi" && c.gan.giaTri !== null && c.nen.giaTri !== null && chotNen !== null) {
       c.anhHuongTuan = Math.max(0, (c.nen.giaTri - c.gan.giaTri) * 7 * chotNen * aov);
     }
   }
+  // --- CHỈ SỐ CUỐI: tiền mỗi đơn, doanh thu / chi phí (cửa sổ kẹp từ mốc tính theo trang) ---
+  const tienAi = async (tu: Date, den: Date) =>
+    Number((await queryOne<{ usd: string }>(
+      `SELECT coalesce(sum(coalesce(cost_ncc, cost_usd)), 0)::text AS usd FROM ai_usage
+        WHERE trang_id = $1 AND created_at >= $2 AND created_at < $3`,
+      [trangId, tu, den]
+    ))?.usd ?? 0);
+  const [aiGan, aiNen] = await Promise.all([tienAi(...wm.gan), tienAi(...wm.nen)]);
+  const thanhPhan = (d: typeof dGan, aiUsd: number, qc: number | null): ThanhPhanTien => ({
+    don: (d?.so ?? 0) - (d?.huy ?? 0),
+    doanhThu: Number(d?.doanh_thu) || 0,
+    tienAiVnd: Math.round(aiUsd * TY_GIA),
+    tienQcVnd: qc,
+  });
+  const tpGan = thanhPhan(dGan, aiGan, qcCuoi?.gan ?? null);
+  const tpNen = thanhPhan(dNen, aiNen, qcCuoi?.nen ?? null);
+  const chiPhi = (t: ThanhPhanTien) => t.tienAiVnd + (t.tienQcVnd ?? 0);
+  const ghiChuCuoi = [
+    "Chi phí = tiền AI + tiền quảng cáo. Chưa có phép thử thống kê cho tỉ số tiền — số để theo dõi, không chấm tốt / tụt.",
+    `Tiền AI quy ra VND theo tỉ giá ước tính ${TY_GIA.toLocaleString("vi-VN")} ₫/USD.`,
+    ...(qcCuoi ? ["Tiền quảng cáo: chỉ phần chi bằng VND cho đúng Fanpage của trang."] : ["Chưa đọc được tiền quảng cáo — chi phí mới gồm tiền AI."]),
+  ];
+  const chiSoCuoi: ChiSoCuoi[] = [
+    {
+      ma: "tien_moi_don", ten: "Tiền bỏ ra cho mỗi đơn", donVi: "vnd", huong: "thap_tot",
+      gan: tpGan.don > 0 ? Math.round(chiPhi(tpGan) / tpGan.don) : null,
+      nen: tpNen.don > 0 ? Math.round(chiPhi(tpNen) / tpNen.don) : null,
+      chiTiet: { gan: tpGan, nen: tpNen }, ghiChu: ghiChuCuoi,
+    },
+    {
+      ma: "doanh_thu_tren_chi_phi", ten: "Doanh thu trên chi phí", donVi: "lan", huong: "cao_tot",
+      gan: chiPhi(tpGan) > 0 ? tpGan.doanhThu / chiPhi(tpGan) : null,
+      nen: chiPhi(tpNen) > 0 ? tpNen.doanhThu / chiPhi(tpNen) : null,
+      chiTiet: { gan: tpGan, nen: tpNen }, ghiChu: ghiChuCuoi,
+    },
+  ];
+
   const THU_TU_KHAU = { ban_hang: 0, quang_cao: 1, noi_dung: 2 } as const;
   const uuTien = chiSo
     .filter((c) => c.muc === "tut")
@@ -316,6 +414,8 @@ export async function sucKhoeTrang(trangId: number, bayGio = new Date()) {
     luc: bayGio.toISOString(),
     cuaSo: { gan: w.gan.map((d) => d.toISOString()), nen: w.nen.map((d) => d.toISOString()) },
     chiSo,
+    /** Chỉ số cuối của cả khối não — để theo dõi, không chấm (xem ChiSoCuoi). */
+    chiSoCuoi,
     suCo,
     /** Cần xử lý, theo thứ tự: sự cố trước, rồi chỉ số tụt theo tiền bị ảnh hưởng. */
     uuTien: uuTien.map((c) => c.ma),

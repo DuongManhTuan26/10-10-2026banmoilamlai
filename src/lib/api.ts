@@ -659,10 +659,24 @@ export interface DeXuatDieuHanh {
   noi_dung: string | null;
 }
 
+export interface ThanhPhanTien { don: number; doanhThu: number; tienAiVnd: number; tienQcVnd: number | null }
+/** Chỉ số cuối của khối não (server/services/suc-khoe.ts — ChiSoCuoi): để theo dõi, không chấm tốt / tụt. */
+export interface ChiSoCuoi {
+  ma: 'tien_moi_don' | 'doanh_thu_tren_chi_phi';
+  ten: string;
+  donVi: 'vnd' | 'lan';
+  huong: 'cao_tot' | 'thap_tot';
+  gan: number | null;
+  nen: number | null;
+  chiTiet: { gan: ThanhPhanTien; nen: ThanhPhanTien };
+  ghiChu: string[];
+}
+
 export interface SucKhoeTrang {
   luc: string;
   cuaSo: { gan: string[]; nen: string[] };
   chiSo: ChiSoSucKhoe[];
+  chiSoCuoi: ChiSoCuoi[];
   suCo: { khau: string; ten: string; chiTiet: string }[];
   uuTien: string[];
   baoVe: string[];

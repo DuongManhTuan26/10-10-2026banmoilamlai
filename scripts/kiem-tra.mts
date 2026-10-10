@@ -5823,6 +5823,17 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   const ban = ma("server/services/sales-ai.ts");
   kiem("khối não", "nhắc khách im lặng quét theo từng trang (không trộn cài đặt tự chủ giữa các trang của một tài khoản)",
     /SELECT trang_id, settings FROM ai_configs\s*WHERE kind = 'sales' AND trang_id IS NOT NULL/.test(ban) && /WHERE c\.trang_id = \$1\s*AND c\.status = 'ai'/.test(ban), true);
+  // Bảng sức khoẻ — nguồn số của AI điều hành (rà soát 10/10/2026).
+  const sk = ma("server/services/suc-khoe.ts");
+  kiem("sức khoẻ", "tỉ lệ chốt / nhường người: tính trên LƯỢT KHÁCH NHẮN (gồm khách cũ quay lại), cửa sổ dời lùi cho hội thoại đủ tuổi chốt",
+    [/export const TUOI_CHOT_NGAY = 2;/.test(sk),
+      /SELECT DISTINCT m\.conversation_id AS id FROM messages m\s*WHERE m\.trang_id = \$3 AND m\.sender_type = 'customer'/.test(sk),
+      /luotNhan\(\.\.\.luiChot\(wm\.gan\)\), luotNhan\(\.\.\.luiChot\(wm\.nen\)\)/.test(sk),
+      /o\.status <> 'cancelled'/.test(sk)], [true, true, true, true]);
+  kiem("sức khoẻ", "có 2 chỉ số cuối (tiền mỗi đơn, doanh thu / chi phí); chi phí = tiền AI + tiền quảng cáo; không chấm tốt / tụt",
+    [/ma: "tien_moi_don"/.test(sk), /ma: "doanh_thu_tren_chi_phi"/.test(sk),
+      /const chiPhi = \(t: ThanhPhanTien\) => t\.tienAiVnd \+ \(t\.tienQcVnd \?\? 0\);/.test(sk),
+      /interface ChiSoCuoi \{[\s\S]{0,300}?muc:/.test(sk)], [true, true, true, false]);
   kiem("khối não", "luật nhường người và hàng rào đọc theo trang",
     [/FROM handoff_rules WHERE trang_id = \$1/.test(ban), /FROM guardrail_configs WHERE trang_id = \$1/.test(ma("server/services/guardrails.ts"))], [true, true]);
 }
