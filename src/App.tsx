@@ -15,10 +15,13 @@ import Onboarding from './pages/Onboarding';
 import SetupComplete from './pages/SetupComplete';
 import { api, ApiError, KHOA_TRANG_DANG_CHON, type User } from './lib/api';
 import { ActivePageProvider, useKhoiNao } from './lib/ActivePage';
+import { mienTheoDuong } from './lib/bon-ai';
 
 type AppState = 'loading' | 'auth' | 'onboarding' | 'setup_complete' | 'main';
 
 export default function App() {
+  // Màu miền của vùng nội dung theo đường dẫn (index.css .mien-*): mọi màu chính bên trong theo đúng AI đang xem.
+  const mien = mienTheoDuong(useLocation().pathname);
   const [appState, setAppState] = useState<AppState>('loading');
   /*
    * Ngăn kéo menu trên điện thoại. Từ lg trở lên biến này không có tác dụng gì
@@ -169,7 +172,7 @@ export default function App() {
           // Quay lại thì về đúng màn hình quản lý của tầng mình (/quan-ly tự rẽ: quản trị tổng → /admin, chủ chuỗi → /quan-ly-trang).
           gocPhai={<DangXemThay user={user} onQuayLai={() => { window.location.href = '/quan-ly'; }} />}
         />
-        <main className="flex-1 overflow-y-auto custom-scrollbar pt-16">
+        <main className={`flex-1 overflow-y-auto custom-scrollbar pt-16 ${mien}`}>
           {/*
             Lỗi ở MỘT màn hình không được kéo đổ cả ứng dụng thành màn hình
             trắng. Hai nút trong lưới hứng lỗi đều điều hướng lại cả trang, nên

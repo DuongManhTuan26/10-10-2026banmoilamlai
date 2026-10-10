@@ -273,8 +273,7 @@ export default function TelegramAlerts() {
       {/* HÀNG 1: THẺ TRẠNG THÁI KẾT NỐI */}
       <div className="space-y-4">
         {isConnected && (
-        <div className="bg-surface-container border border-primary/50 shadow-[0_0_20px_rgba(0,229,255,0.1)] rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[80px] -z-10 rounded-full"></div>
+        <div className="bg-surface-container border border-primary/50 rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
           
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 bg-[#2AABEE]/10 rounded-full flex items-center justify-center shrink-0 border border-[#2AABEE]/30">

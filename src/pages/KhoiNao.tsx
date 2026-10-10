@@ -19,6 +19,7 @@ import Inbox from './Inbox';
 import Orders from './Orders';
 import AutoScripts from './AutoScripts';
 import Analytics from './Analytics';
+import AnToanTaiKhoan from '../components/AnToanTaiKhoan';
 import { useKhoiNao } from '../lib/ActivePage';
 import { BON_AI, aiTheoMa } from '../lib/bon-ai';
 import { api, type ChiSoSucKhoe, type SucKhoeTrang } from '../lib/api';
@@ -66,10 +67,9 @@ function BanHangDangLam() {
           <button
             key={v.ma}
             onClick={() => chon(v.ma)}
+            // Màu chính = màu miền ③ Bán hàng (index.css .mien-ban-hang) — cùng kiểu ô chọn ở thẻ Hướng dẫn AI.
             className={clsx('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition',
-              viec !== v.ma && 'text-on-surface-variant hover:text-on-surface')}
-            // Màu của AI bán hàng (src/lib/bon-ai.ts) — không ghi cứng màu nền ngoài bảng màu.
-            style={viec === v.ma ? { color: aiTheoMa('sales').hex, background: `${aiTheoMa('sales').hex}26` } : undefined}
+              viec === v.ma ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:text-on-surface')}
           >
             <span className="material-symbols-outlined text-[18px]">{v.icon}</span>
             {v.ten}
@@ -93,7 +93,8 @@ export function BanHangAi() {
     <KhuonAi
       ai="sales"
       the={{
-        'ket-qua': <KetQuaAi ai="sales" />,
+        // An toàn tài khoản + quy định gửi tin của Facebook (chuyển từ Gói dịch vụ — rà soát lượt 2, T11).
+        'ket-qua': <KetQuaAi ai="sales" them={<AnToanTaiKhoan />} />,
         'dang-lam': <BanHangDangLam />,
         // Vai trò, tài liệu, các bước bán hàng, tự chủ, kịch bản bình luận — màn hình cấu hình sẵn có của AI bán hàng.
         'huong-dan': (

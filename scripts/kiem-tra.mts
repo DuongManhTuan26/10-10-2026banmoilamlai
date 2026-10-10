@@ -1451,7 +1451,8 @@ kiem("xưởng AI", "ảnh: giá trên nút tạo; phong cách và giới hạn 
       /<span className="hidden sm:inline-flex">\s*<span className=\{clsx\("material-symbols-outlined text-\[20px\]", dangGuiBai && "animate-spin"\)\}>/.test(nguonSoanBai)], [true, true]);
   kiem("theo bài", "bài chờ video hiện 'Đang tạo video AI · xong tự đăng', ẩn nút duyệt (duyệt lúc này là đăng thiếu video)",
     [/\{post\.cho_video_id \? 'ĐANG TẠO VIDEO AI · XONG TỰ ĐĂNG' : POST_STATUS_LABELS\[post\.status\]\.toUpperCase\(\)\}/.test(nguonSoanBai),
-      /\{post\.status === 'pending_approval' && !post\.cho_video_id && \(/.test(nguonSoanBai)], [true, true]);
+      // Nút thao tác chỉ còn ở chân thẻ (rà soát lượt 2, T4) — nút duyệt ẩn khi bài chờ video.
+      /\{!post\.cho_video_id && <button onClick=\{\(\) => handleApprove\(post\.id\)\}/.test(nguonSoanBai)], [true, true]);
   kiem("theo bài", "máy chủ: chỉ gắn video cho bài chưa gửi đăng, mô hình làm được, có giá; gắn bằng một lệnh có điều kiện",
     [/if \(!Number\.isInteger\(p\.postId\) \|\| p\.postId <= 0\) throw new AppError/.test(hamTB),
       /if \(!TRANG_THAI_CHO_VIDEO\.includes\(bai\.status\)\) throw new AppError/.test(hamTB),
@@ -3415,8 +3416,9 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
   kiem("phân tầng", "chưa có trang nào thì không bày khối não rỗng",
     /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? \[/.test(nguonMenu) &&
       /const nhomDuLieu = coNao\s*\n\s*\? \[/.test(nguonMenu), true);
-  kiem("phân tầng", "bộ chọn trang chỉ hiện khi có trang để chọn hoặc là tài khoản quản lý",
-    /\{coNao \|\| laChuChuoi \|\| laQuanTri \? <ChonKhoiNao \/> : null\}/.test(nguonMenu), true);
+  // Chọn trang ở mục "Trang & kênh" ngay dưới logo (bỏ ô chọn trùng ở menu — rà soát lượt 2, T1).
+  kiem("phân tầng", "mục chọn trang (Trang & kênh) chỉ hiện khi có trang để chọn hoặc là tài khoản quản lý",
+    /\{\(coNao \|\| laChuChuoi \|\| laQuanTri\) && renderNavGroup\(\[mucTrangKenh\]\)\}/.test(nguonMenu), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -5027,7 +5029,7 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   // Mọi hộp thoại đi qua khung chung. Chỉ còn lớp phủ của menu/thanh bên được dùng fixed inset-0.
   // DangXemThay.tsx: menu xổ xuống trong thanh tiêu đề (như menu tài khoản của TopNavBar) — lớp phủ để bấm ra ngoài thì đóng.
   // ChonKhoiNao.tsx: menu xổ xuống của bộ chọn Trang bán hàng — lớp phủ chỉ để bấm ra ngoài thì đóng (như DangXemThay).
-  const DUOC_PHEP = ["HopThoai.tsx", "Sidebar.tsx", "TopNavBar.tsx", "Orders.tsx", "DangXemThay.tsx", "ChonKhoiNao.tsx"];
+  const DUOC_PHEP = ["HopThoai.tsx", "Sidebar.tsx", "TopNavBar.tsx", "Orders.tsx", "DangXemThay.tsx"];
   // Chủ dự án chọn tông của thanh menu cho cả app: nền lưới + quầng sáng xanh ngọc.
   kiem("giao diện", "nền chung của app cùng chất liệu với menu",
     /\.nen-app \{[\s\S]{0,600}?background-size: auto, auto, 24px 24px, 24px 24px;/.test(nguonCss) &&
@@ -5854,7 +5856,7 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     /await coHanGio\("điều hành hằng ngày", runDueDieuHanhNgay\(\), 5 \* HAN_MOI_VIEC_MS\)/.test(ma("server/worker.ts")), true);
   // Chủ dự án 10/10/2026: thẻ theo trình tự làm việc — dạy AI trước, làm, xem kết quả, cuối cùng xem thay đổi.
   kiem("khối não", "4 thẻ đúng thứ tự Hướng dẫn AI → Đang làm → Kết quả → Nhật ký; thẻ đầu mở mặc định",
-    [[...doc2("src/lib/bon-ai.ts").matchAll(/\{ ma: '([a-z-]+)', ten: '[^']+', bieuTuong:/g)].map((m) => m[1]).join(" "),
+    [[...doc2("src/lib/bon-ai.ts").matchAll(/\{ ma: '([a-z-]+)', ten: '[^']+', moTa: '[^']+', bieuTuong:/g)].map((m) => m[1]).join(" "),
       /\?\.ma \?\? BON_THE\[0\]\.ma\) as MaThe;/.test(doc2("src/components/KhuonAi.tsx"))],
     ["huong-dan dang-lam ket-qua nhat-ky", true]);
   kiem("khối não", "luật nhường người và hàng rào đọc theo trang",

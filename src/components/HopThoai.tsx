@@ -76,7 +76,8 @@ export default function HopThoai({
         role="dialog"
         aria-modal="true"
         className={clsx(
-          'relative flex flex-col overflow-hidden rounded-2xl border border-outline-variant nen-app shadow-[0_0_40px_rgba(0,229,255,0.12)]',
+          // Quầng sáng theo màu MIỀN đang mở (index.css .mien-*), không ghi cứng xanh ngọc.
+          'relative flex flex-col overflow-hidden rounded-2xl border border-outline-variant nen-app shadow-[0_0_40px_color-mix(in_srgb,var(--color-primary)_12%,transparent)]',
           CO[co]
         )}
       >

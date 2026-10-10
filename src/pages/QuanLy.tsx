@@ -609,7 +609,7 @@ export default function QuanLy({ user }: { user: User | null }) {
         <button
           type="button"
           onClick={() => setMoTao(true)}
-          className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:brightness-110 transition-all flex items-center gap-2"
+          className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg hover:brightness-110 transition-all flex items-center gap-2"
         >
           <span className="material-symbols-outlined text-[18px]">person_add</span>
           Tạo tài khoản

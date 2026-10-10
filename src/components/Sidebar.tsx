@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useKhoiNao } from '../lib/ActivePage';
-import ChonKhoiNao from './ChonKhoiNao';
 import { BON_AI } from '../lib/bon-ai';
 
 /**
@@ -67,7 +66,7 @@ export default function Sidebar({
   /*
    * MENU THEO KHỐI NÃO (chủ dự án chốt 10/10/2026 — docs/khoi-nao.md).
    *
-   *   [Trang bán hàng ▾]          ← bộ chọn DUY NHẤT
+   *   Trang & kênh                ← nơi DUY NHẤT chọn khối não (bỏ ô chọn trùng — rà soát lượt 2, T1)
    *   KHỐI NÃO AI                 ← 4 AI cố định, liền mạch, luôn đi cùng nhau
    *     Tổng quan khối não
    *     ① AI Nội dung · ② AI Quảng cáo · ③ AI Bán hàng · ④ AI Điều hành
@@ -79,13 +78,14 @@ export default function Sidebar({
   const coNao = !!nao;
   const nhomNao = coNao
     ? [
-        { name: 'Tổng quan khối não', icon: 'hub', path: '/' },
+        // Tổng quan khối não thuộc miền ④ Điều hành (xanh ngọc) — src/lib/bon-ai.ts mienTheoDuong.
+        { name: 'Tổng quan khối não', icon: 'hub', path: '/', mau: BON_AI[3].hex },
         ...BON_AI.map((a) => ({ name: a.ten, icon: a.bieuTuong, path: a.duong, so: a.so, mau: a.hex })),
       ]
     : [];
+  const mucTrangKenh = { name: 'Trang & kênh', icon: 'storefront', path: '/ket-noi' };
   const nhomDuLieu = coNao
     ? [
-        { name: 'Kết nối kênh', icon: 'cable', path: '/ket-noi' },
         { name: 'Báo cáo Telegram', icon: 'notifications_active', path: '/telegram' },
       ]
     : [];
@@ -99,9 +99,11 @@ export default function Sidebar({
     <div className="px-3 pb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#E8EDF2]/50">{chu}</div>
   );
 
+  /** Màu sáng của mục khi đang chọn: 4 AI + Tổng quan theo màu miền, mục hệ thống trắng (không tranh màu với 4 AI). */
+  const MAU_HE_THONG = '#e2e8f0';
   const renderNavGroup = (items: any[]) => (
     <div className="flex flex-col relative" style={{ gap: '8px' }}>
-      {items.map((item) => (
+      {items.map((item) => { const mau: string = item.mau ?? MAU_HE_THONG; return (
         <NavLink
           key={item.path}
           to={item.path}
@@ -116,12 +118,11 @@ export default function Sidebar({
             fontWeight: isActive ? 700 : 600,
             letterSpacing: '0.2px',
             color: isActive ? '#FFFFFF' : '#E8EDF2',
-            background: isActive ? 'linear-gradient(90deg, rgba(0,229,255,0.15) 0%, rgba(0,229,255,0.01) 100%)' : 'transparent',
-            borderTop: isActive ? '1px solid rgba(0,229,255,0.15)' : '1px solid transparent',
-            borderRight: isActive ? '1px solid rgba(0,229,255,0.15)' : '1px solid transparent',
-            borderBottom: isActive ? '1px solid rgba(0,229,255,0.15)' : '1px solid transparent',
+            background: isActive ? `linear-gradient(90deg, ${mau}26 0%, ${mau}03 100%)` : 'transparent',
+            borderTop: isActive ? `1px solid ${mau}26` : '1px solid transparent',
+            borderRight: isActive ? `1px solid ${mau}26` : '1px solid transparent',
+            borderBottom: isActive ? `1px solid ${mau}26` : '1px solid transparent',
             borderLeft: 'none',
-            boxShadow: isActive ? 'inset 20px 0 40px -20px rgba(0,229,255,0.2)' : 'none',
           })}
         >
           {({ isActive }) => (
@@ -133,7 +134,7 @@ export default function Sidebar({
 
               {/* Laser left border for active item */}
               {isActive && (
-                <div className="absolute left-0 top-[15%] bottom-[15%] w-[3px] bg-[#00e5ff] rounded-r-md shadow-[0_0_15px_#00e5ff,0_0_5px_#ffffff] z-20"></div>
+                <div className="absolute left-0 top-[15%] bottom-[15%] w-[3px] rounded-r-md z-20" style={{ background: mau }}></div>
               )}
 
               {/* Số thứ tự + màu riêng của từng AI trong khối não (src/lib/bon-ai.ts). */}
@@ -149,13 +150,10 @@ export default function Sidebar({
               <span 
                 className="material-symbols-outlined relative z-10 transition-all duration-300 flex items-center justify-center w-6" 
                 style={{
-                  color: isActive ? '#00e5ff' : 'inherit',
+                  color: isActive ? mau : 'inherit',
                   strokeWidth: isActive ? 2.5 : 2,
                   fontSize: '24px',
-                  ...(isActive ? { 
-                    fontVariationSettings: "'FILL' 1",
-                    filter: 'drop-shadow(0 0 10px rgba(0,229,255,0.8))'
-                  } : {}),
+                  ...(isActive ? { fontVariationSettings: "'FILL' 1" } : {}),
                 }}
               >
                 {item.icon}
@@ -166,14 +164,10 @@ export default function Sidebar({
                 {item.name}
               </span>
 
-              {/* Active ambient sweep inside the button */}
-              {isActive && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#00e5ff]/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out"></div>
-              )}
             </>
           )}
         </NavLink>
-      ))}
+      ); })}
     </div>
   );
 
@@ -219,13 +213,14 @@ export default function Sidebar({
         </div>
 
         <nav className="flex flex-col min-h-0 overflow-y-auto no-scrollbar">
-          {coNao || laChuChuoi || laQuanTri ? <ChonKhoiNao /> : null}
+          {/* Trang & kênh ngay dưới logo: nơi chọn khối não (trang bán hàng) và nối kênh. */}
+          {(coNao || laChuChuoi || laQuanTri) && renderNavGroup([mucTrangKenh])}
           {coNao && (
             <>
               <div style={{ height: '20px', flexShrink: 0 }}></div>
               {nhan('Khối não AI')}
               {/* Viền bao trọn 4 AI: một khối liền mạch, không tách rời. */}
-              <div className="rounded-2xl border border-[#00e5ff]/20 p-1.5 shrink-0" style={{ background: 'rgba(0,229,255,0.03)' }}>
+              <div className="rounded-2xl border border-white/10 p-1.5 shrink-0" style={{ background: 'rgba(255,255,255,0.02)' }}>
                 {renderNavGroup(nhomNao)}
               </div>
               <div style={{ height: '20px', flexShrink: 0 }}></div>

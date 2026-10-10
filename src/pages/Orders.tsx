@@ -405,8 +405,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Card 1 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐƠN HÔM NAY</h3>
             <div className="flex items-baseline gap-2">
@@ -423,8 +422,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         </div>
 
         {/* Card 2 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">CHỜ XÁC NHẬN</h3>
             <div className="flex items-baseline gap-2">
@@ -441,8 +439,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         </div>
 
         {/* Card 3 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐANG GIAO</h3>
             <div className="flex items-baseline gap-2">
@@ -453,8 +450,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         </div>
 
         {/* Card 4 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">DOANH THU THÁNG</h3>
             <div className="flex items-baseline gap-2">
@@ -493,7 +489,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
                 className={clsx(
                   "px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors border",
                   isActive 
-                    ? "bg-primary text-on-primary border-primary shadow-[0_0_10px_rgba(0,229,255,0.2)]" 
+                    ? "bg-primary text-on-primary border-primary" 
                     : "bg-surface-container text-on-surface-variant border-outline-variant hover:bg-surface-container hover:text-on-surface"
                 )}
               >

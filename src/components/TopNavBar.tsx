@@ -1,6 +1,7 @@
 import { BON_AI } from '../lib/bon-ai';
+import { useKhoiNao } from '../lib/ActivePage';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type User } from '../lib/api';
 import DoiMatKhau from './DoiMatKhau';
 
@@ -14,6 +15,7 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
   gocPhai?: ReactNode;
 }) {
   const location = useLocation();
+  const { nao } = useKhoiNao();
   const [menuMo, setMenuMo] = useState(false);
   const [doiMatKhauMo, setDoiMatKhauMo] = useState(false);
   const navigate = useNavigate();
@@ -49,7 +51,7 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
     if (ai) return ai.ten;
     switch (location.pathname) {
       case '/': return 'Tổng quan khối não';
-      case '/ket-noi': return 'Kết nối kênh';
+      case '/ket-noi': return 'Trang & kênh';
       case '/telegram': return 'Báo cáo Telegram';
       case '/pricing': return 'Gói dịch vụ';
       // Cùng một màn hình quản lý cho cả hai tầng — cùng tiêu đề.
@@ -64,34 +66,49 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
    * còn chỗ nào để mở menu — mà menu thì đã trượt ra ngoài màn hình. Giờ luôn
    * hiện, và dưới lg có thêm nút mở ngăn kéo.
    */
+  // Màu tiêu đề theo miền (src/lib/bon-ai.ts): 4 AI theo màu của nó, Tổng quan = ④ Điều hành, trang hệ thống = trắng.
+  const aiDangXem = BON_AI.find((a) => a.duong === location.pathname);
+  const mauTieuDe = aiDangXem?.hex ?? (location.pathname === '/' ? BON_AI[3].hex : '#f1f5f9');
+
   return (
-    <nav className="fixed top-0 right-0 w-full lg:w-[calc(100%-288px)] z-40 bg-surface shadow-[0_4px_30px_rgba(0,229,255,0.1)] border-b border-primary/20 transition-all duration-200 flex justify-between items-center gap-2 px-4 sm:px-margin py-base h-16">
+    <nav className="fixed top-0 right-0 w-full lg:w-[calc(100%-288px)] z-40 bg-surface border-b border-outline-variant transition-all duration-200 flex justify-between items-center gap-2 px-4 sm:px-margin py-base h-16">
       <div className="flex items-center gap-2 sm:gap-md min-w-0">
         <button
           onClick={onMoMenu}
           title="Mở menu"
           aria-label="Mở menu"
-          className="lg:hidden text-primary hover:bg-surface-container-highest/80 rounded-lg p-2 -ml-1 transition-colors flex items-center justify-center shrink-0"
+          className="lg:hidden text-on-surface hover:bg-surface-container-highest/80 rounded-lg p-2 -ml-1 transition-colors flex items-center justify-center shrink-0"
         >
           <span className="material-symbols-outlined">menu</span>
         </button>
-        <h1 className="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary truncate">{getPageTitle()}</h1>
-        <div className="hidden lg:flex items-center gap-base ml-lg">
-          <span className="font-mono text-label-sm px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/30 font-bold tracking-wide">
-            TỰ ĐỘNG HÓA THỜI GIAN THỰC
-          </span>
-        </div>
+        <h1 className="text-xl sm:text-2xl font-bold truncate" style={{ color: mauTieuDe }}>{getPageTitle()}</h1>
+        {/*
+          Khối não đang làm việc (thay nhãn trang trí "TỰ ĐỘNG HÓA THỜI GIAN THỰC" — rà soát lượt 2, T10). Đổi khối não ở
+          Trang & kênh — nơi duy nhất chọn trang (bỏ bộ chọn trùng ở thanh menu, T1).
+        */}
+        {nao && (
+          <Link
+            to="/ket-noi"
+            title="Đổi trang bán hàng ở Trang & kênh"
+            className="hidden md:flex items-center gap-1.5 min-w-0 ml-2 px-3 py-1 rounded-full border border-white/15 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/30 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px] shrink-0">storefront</span>
+            <span className="shrink-0">Khối não:</span>
+            <b className="text-on-surface truncate max-w-[260px]">{nao.ten}</b>
+          </Link>
+        )}
       </div>
       <div className="flex items-center gap-base">
         {gocPhai}
         <button
           onClick={() => navigate('/ban-hang?the=dang-lam&viec=hop-thu')}
           title={waitingCount > 0 ? `${waitingCount} hội thoại đang chờ bạn xử lý` : 'Không có việc nào đang chờ'}
-          className="text-primary hover:bg-surface-container-highest/80 rounded-full p-2 transition-all duration-200 flex items-center justify-center relative"
+          className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/80 rounded-full p-2 transition-all duration-200 flex items-center justify-center relative"
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>notifications</span>
+          {/* Khách chờ người = việc cần làm ngay → hồng (bảng B). */}
           {waitingCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-on-error text-[10px] font-bold flex items-center justify-center border-2 border-surface">
+            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-gap text-black text-[10px] font-bold flex items-center justify-center border-2 border-surface">
               {waitingCount > 99 ? '99+' : waitingCount}
             </span>
           )}
@@ -99,14 +116,14 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
         <button
           onClick={() => navigate('/auto-scripts')}
           title="Cấu hình AI bán hàng"
-          className="text-primary hover:bg-surface-container-highest/80 rounded-full p-2 transition-all duration-200 flex items-center justify-center"
+          className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/80 rounded-full p-2 transition-all duration-200 flex items-center justify-center"
         >
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>bolt</span>
         </button>
         <div className="relative ml-sm">
         <div
           onClick={() => setMenuMo((v) => !v)}
-          className="h-8 w-8 rounded-full border-2 border-primary overflow-hidden relative group cursor-pointer"
+          className="h-8 w-8 rounded-full border-2 border-white/30 overflow-hidden relative group cursor-pointer"
           title={user?.email ?? ''}
         >
           {avatarUrl ? (
@@ -114,12 +131,12 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
           ) : (
             /* Chỉ dùng khi Fanpage chưa có ảnh đại diện — giữ nguyên khung tròn và viền */
             <div className="w-full h-full bg-surface-container-high flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <span className="font-label-sm font-bold text-primary text-sm">
+              <span className="font-label-sm font-bold text-on-surface text-sm">
                 {(user?.name || user?.email || '?').trim().charAt(0).toUpperCase()}
               </span>
             </div>
           )}
-          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-background"></div>
+          {/* Bỏ chấm xanh "đang trực tuyến" — không đo gì (rà soát lượt 2, T10). */}
         </div>
 
         {/*

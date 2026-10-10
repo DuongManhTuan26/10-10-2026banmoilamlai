@@ -25,19 +25,24 @@ import {
 import { chi, chiDu, mauChi, vnd } from '../lib/tien-chi';
 import { DongLuot } from './NhatKyChiPhi';
 import BaoCaoChuoi from './BaoCaoChuoi';
-import SucKhoeTrang from './SucKhoeTrang';
-import DieuHanhThu from './DieuHanhThu';
+import { useNavigate } from 'react-router-dom';
+import { useKhoiNao } from '../lib/ActivePage';
+import { aiTheoMa } from '../lib/bon-ai';
 
 /** Các loại tiền, đúng thứ tự hiện. Tiền AI theo nhóm việc của sổ AI; "kenh" = tiền hoá đơn kết nối kênh tính cho từng kênh. */
+/*
+ * Màu theo MIỀN của AI làm ra khoản tiền (bảng màu A): bán hàng lục · viết bài / ảnh / video thuộc ① Nội dung (các sắc
+ * tím) · phân tích thuộc ④ Điều hành (xanh ngọc) · dạy AI lam (thông tin) · kênh + chưa phân loại xám.
+ */
 export const LOAI_TIEN = [
-  { id: 'ban_hang', ten: 'Chatbot bán hàng', mau: '#22d3ee' },
-  { id: 'marketing', ten: 'Marketing', mau: '#f472b6' },
-  { id: 'phan_tich', ten: 'Phân tích', mau: '#818cf8' },
-  { id: 'anh', ten: 'Tạo ảnh', mau: '#facc15' },
-  { id: 'video', ten: 'Tạo video', mau: '#c084fc' },
-  { id: 'day_ai', ten: 'Dạy AI', mau: '#2dd4bf' },
+  { id: 'ban_hang', ten: 'Chatbot bán hàng', mau: '#34d399' },
+  { id: 'marketing', ten: 'Viết bài', mau: '#a78bfa' },
+  { id: 'phan_tich', ten: 'Phân tích', mau: '#22d3ee' },
+  { id: 'anh', ten: 'Tạo ảnh', mau: '#c4b5fd' },
+  { id: 'video', ten: 'Tạo video', mau: '#8b5cf6' },
+  { id: 'day_ai', ten: 'Dạy AI', mau: '#60a5fa' },
   { id: 'chua_phan_loai', ten: 'Chưa phân loại', mau: '#64748b' },
-  { id: 'kenh', ten: 'Kết nối kênh', mau: '#60a5fa' },
+  { id: 'kenh', ten: 'Kết nối kênh', mau: '#94a3b8' },
 ] as const;
 export type LoaiTien = (typeof LOAI_TIEN)[number]['id'];
 export type TienTheoLoai = Partial<Record<LoaiTien, number>>;
@@ -357,6 +362,9 @@ const TEN_NEN_TANG: Record<string, string> = {
 
 /** Báo cáo MỘT TRANG — mở khi bấm vào trang trong cây. Đầu tiên là tiền đã chi và sao kê từng lượt. */
 export function BaoCaoMotTrang({ t, ky, chot }: { t: TrangTongQuan; ky: KyTongQuan; chot: TongQuanQuanLy['chot'] }) {
+  const { chonNao } = useKhoiNao();
+  const navigate = useNavigate();
+  const dieuHanh = aiTheoMa('analytics');
   const [so, setSo] = useState(1);
   const [du, setDu] = useState<{ luot: LuotChiPhi[]; tongLan: number; tongUsd: number; soTrang: number } | null>(null);
   const [loi, setLoi] = useState('');
@@ -450,17 +458,19 @@ export function BaoCaoMotTrang({ t, ky, chot }: { t: TrangTongQuan; ky: KyTongQu
         </div>
       </div>
 
-      {/* Sức khoẻ từng khâu — thống kê chấm, không AI (bước 4a của AI điều hành) */}
-      <div>
-        <h4 className="font-mono text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Sức khoẻ (7 ngày gần so với 28 ngày trước)</h4>
-        <SucKhoeTrang trangId={t.id} />
-      </div>
-
-      {/* AI điều hành — chạy thử ở chế độ đề xuất (không thực thi gì) */}
-      <div>
-        <h4 className="font-mono text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">AI điều hành — chạy thử (chế độ đề xuất)</h4>
-        <DieuHanhThu trangId={t.id} />
-      </div>
+      {/*
+        Sức khoẻ và AI điều hành của trang nằm ở ④ AI Điều hành trong khối não của trang — bản cũ bày lại cả hai ở đây
+        (rà soát lượt 2, T9). Một nút mở thẳng đúng chỗ đó.
+      */}
+      <button
+        type="button"
+        onClick={() => { chonNao(t.id); navigate(`${dieuHanh.duong}?the=ket-qua`); }}
+        className="w-full sm:w-auto inline-flex items-center gap-2 px-4 h-10 rounded-xl border text-sm font-bold hover:brightness-125 transition"
+        style={{ color: dieuHanh.hex, borderColor: `${dieuHanh.hex}80`, background: `${dieuHanh.hex}14` }}
+      >
+        <span className="material-symbols-outlined text-[18px]">{dieuHanh.bieuTuong}</span>
+        Xem sức khoẻ & đề xuất ở ④ AI Điều hành của trang này
+      </button>
 
       {/* Chuỗi 4 khâu: Nội dung → Quảng cáo → Bán hàng → Tổng (phần 2) */}
       <div>

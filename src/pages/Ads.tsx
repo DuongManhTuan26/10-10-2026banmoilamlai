@@ -714,7 +714,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
               <option key={k.ma} value={k.ma}>{k.nhan}</option>
             ))}
           </select>
-          <button onClick={openFlow} className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2">
+          <button onClick={openFlow} className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg hover:scale-105 transition-transform flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">add</span>
             Tạo quảng cáo
           </button>
@@ -723,8 +723,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
 
       {/* Row 1: Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 blur-2xl rounded-full group-hover:bg-blue-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">TỔNG CHI TIÊU</h3>
             <div className="flex items-baseline gap-2">
@@ -736,8 +735,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
           <p className="text-xs text-on-surface-variant mt-auto font-medium">{ghiChuKy}</p>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/10 blur-2xl rounded-full group-hover:bg-purple-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">LƯỢT TIẾP CẬN</h3>
             <div className="flex items-baseline gap-2">
@@ -749,8 +747,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
           <p className="text-xs text-on-surface-variant mt-auto font-medium">Số người khác nhau đã thấy quảng cáo</p>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-orange-500/10 blur-2xl rounded-full group-hover:bg-orange-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">BÌNH LUẬN THU ĐƯỢC</h3>
             <div className="flex items-baseline gap-2">
@@ -767,8 +764,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
         </div>
 
         {/* Highlighted Card */}
-        <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/60 transition-colors h-[140px] shadow-[0_0_20px_rgba(0,229,255,0.1)]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-2xl rounded-full group-hover:bg-primary/30 transition-colors"></div>
+        <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/60 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐƠN CHỐT TỪ QUẢNG CÁO</h3>
             <div className="flex items-baseline gap-2">
@@ -822,12 +818,12 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorReach" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00E5FF" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#00E5FF" stopOpacity={0}/>
+                  <stop offset="5%" stopColor={aiTheoMa('ads').hex} stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor={aiTheoMa('ads').hex} stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                  <stop offset="5%" stopColor={aiTheoMa('sales').hex} stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor={aiTheoMa('sales').hex} stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -839,8 +835,8 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                 itemStyle={{ color: '#fff' }}
               />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px', color: '#A1A1AA' }} />
-              <Area yAxisId="left" type="monotone" dataKey="reach" name="Lượt tiếp cận" stroke="#00E5FF" strokeWidth={2} fillOpacity={1} fill="url(#colorReach)" />
-              <Area yAxisId="right" type="monotone" dataKey="orders" name="Đơn chốt" stroke="#8B5CF6" strokeWidth={2} fillOpacity={1} fill="url(#colorOrders)" />
+              <Area yAxisId="left" type="monotone" dataKey="reach" name="Lượt tiếp cận" stroke={aiTheoMa('ads').hex} strokeWidth={2} fillOpacity={1} fill="url(#colorReach)" />
+              <Area yAxisId="right" type="monotone" dataKey="orders" name="Đơn chốt" stroke={aiTheoMa('sales').hex} strokeWidth={2} fillOpacity={1} fill="url(#colorOrders)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1071,7 +1067,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                         // Danh sách chiến dịch nằm ngay trên trang này (đã nạp lại sau khi tạo) — cuộn tới đó.
                         setTimeout(() => document.getElementById('ds-chien-dich')?.scrollIntoView({ behavior: 'smooth' }), 50);
                       }}
-                      className="flex-1 py-3 px-4 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform shadow-[0_4px_15px_rgba(0,229,255,0.3)]"
+                      className="flex-1 py-3 px-4 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform"
                     >
                       Xem chiến dịch
                     </button>
@@ -1109,7 +1105,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                         className={clsx(
                           "text-left p-4 rounded-xl border transition-all duration-200 bg-surface-container hover:bg-surface-container group flex gap-4",
                           selectedPostId === post.id 
-                            ? "border-primary bg-primary/5 shadow-[0_0_15px_rgba(0,229,255,0.1)]" 
+                            ? "border-primary bg-primary/5" 
                             : "border-outline-variant hover:border-primary/50"
                         )}
                       >
@@ -1211,7 +1207,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                     </div>
 
                     <div className="md:col-span-2">
-                      <div className="sticky top-0 bg-primary/10 border-2 border-primary/40 rounded-2xl p-6 shadow-[0_0_30px_rgba(0,229,255,0.15)] h-full flex flex-col justify-center overflow-hidden">
+                      <div className="sticky top-0 bg-primary/10 border-2 border-primary/40 rounded-2xl p-6 h-full flex flex-col justify-center overflow-hidden">
                         <h3 className="tieu-de-muc mb-4">
                           TỔNG CHI TIÊU TỐI ĐA
                         </h3>
@@ -1429,7 +1425,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                     </div>
                   </div>
 
-                  <div className="bg-surface-container-highest border-2 border-primary/30 rounded-2xl p-6 text-center shadow-[0_0_40px_rgba(0,229,255,0.08)] mb-8 overflow-hidden">
+                  <div className="bg-surface-container-highest border-2 border-primary/30 rounded-2xl p-6 text-center mb-8 overflow-hidden">
                     <h3 className="tieu-de-muc mb-2">TỔNG CHI TIÊU TỐI ĐA</h3>
                     <div className={clsx(
                       "font-black text-on-surface mb-3 tracking-tight whitespace-nowrap",
@@ -1450,7 +1446,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                     <button 
                       onClick={handleLaunchBoost}
                       disabled={busy}
-                      className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl shadow-[0_4px_25px_rgba(0,229,255,0.4)] hover:scale-[1.02] transition-transform"
+                      className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl hover:scale-[1.02] transition-transform"
                     >
                       Xác nhận và chạy
                     </button>

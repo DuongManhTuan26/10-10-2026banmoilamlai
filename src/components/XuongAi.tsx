@@ -295,7 +295,8 @@ export function XuongAi({
       'px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors',
       chon ? 'border-primary bg-primary/15 text-primary' : 'border-outline-variant bg-surface text-on-surface-variant hover:border-primary/50'
     );
-  // Màu theo bên: ảnh xanh ngọc (primary), video hồng tím (secondary) — chủ dự án 04/10/2026.
+  // Màu theo bên: ảnh = màu chính của miền (① Nội dung — tím), video hồng tím (secondary) — hai bên vẫn khác màu như
+  // chủ dự án chọn 04/10/2026; màu ảnh theo màu miền (chủ dự án 10/10/2026: mọi chỗ thuộc miền nào dùng màu miền đó).
   // Bên đi theo bài: tối hẳn. Bên tạo riêng: viền màu; đang chọn thì tô đầy + phát sáng mạnh.
   const laAnh = cheDoMo === 'anh';
   const nutCheDo = (c: CheDoXuong) => {
@@ -353,11 +354,12 @@ export function XuongAi({
         <div className="flex gap-2 col-span-2" role="tablist">
           <button type="button" role="tab" aria-selected={laAnh} disabled={!anhRieng} onClick={() => setCheDo('anh')} className={nutCheDo('anh')}>
             <span className="material-symbols-outlined text-[18px]">image</span>
-            Tạo ảnh
+            {/* Nút CHỌN BÊN — nút tạo thật nằm trong ô prompt (bản cũ cùng chữ "Tạo ảnh" ở hai chỗ — rà soát lượt 2, T7). */}
+            Ảnh
           </button>
           <button type="button" role="tab" aria-selected={!laAnh} disabled={!videoRieng} onClick={() => setCheDo('video')} className={nutCheDo('video')}>
             <span className="material-symbols-outlined text-[18px]">movie</span>
-            Tạo video
+            Video
           </button>
         </div>
       </div>

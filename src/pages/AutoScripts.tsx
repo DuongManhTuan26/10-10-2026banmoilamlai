@@ -647,7 +647,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               className={clsx(
                 'text-left p-4 rounded-xl border transition-all',
                 tone === option.id
-                  ? 'bg-primary/10 border-primary shadow-[0_0_15px_rgba(0,229,255,0.2)]'
+                  ? 'bg-primary/10 border-primary'
                   : 'bg-surface-container border-outline-variant hover:border-primary/50'
               )}
             >
@@ -668,7 +668,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
           <button
             onClick={handleSaveTraining}
             disabled={busy}
-            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
+            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
           >
             {busy ? 'Đang lưu…' : 'Lưu cách nói chuyện'}
           </button>
@@ -790,7 +790,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
         className={clsx(
           'relative rounded-2xl overflow-hidden border-2 transition-colors',
           tuChu.bat
-            ? 'bg-primary/[0.07] border-primary shadow-[0_0_40px_rgba(0,229,255,0.18)]'
+            ? 'bg-primary/[0.07] border-primary'
             : 'bg-surface-container border-primary/45'
         )}
       >
@@ -802,7 +802,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
                 className={clsx(
                   'w-12 h-12 rounded-full flex items-center justify-center shrink-0 border transition-all',
                   tuChu.bat
-                    ? 'bg-primary/20 border-primary shadow-[0_0_20px_rgba(0,229,255,0.45)]'
+                    ? 'bg-primary/20 border-primary'
                     : 'bg-primary/10 border-primary/40'
                 )}
               >
@@ -840,7 +840,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               className={clsx(
                 'relative w-14 h-8 rounded-full transition-colors shrink-0 border',
                 tuChu.bat
-                  ? 'bg-primary border-primary shadow-[0_0_16px_rgba(0,229,255,0.5)]'
+                  ? 'bg-primary border-primary'
                   : 'bg-surface-container border-primary/40 hover:border-primary/70'
               )}
               title={tuChu.bat ? 'Tắt chế độ tự chủ' : 'Bật chế độ tự chủ'}
@@ -948,7 +948,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
             <button
               onClick={luuCheDoTuChu}
               disabled={luuTuChu}
-              className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
+              className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
             >
               {luuTuChu ? 'Đang lưu…' : 'Lưu chế độ'}
             </button>
@@ -1082,7 +1082,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
           <button
             onClick={luuCacBuoc}
             disabled={luuBuoc}
-            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
+            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100"
           >
             {luuBuoc ? 'Đang lưu…' : 'Lưu các bước'}
           </button>
@@ -1248,8 +1248,11 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
       */}
       {!trongKhuon && <TrangDangHuanLuyen />}
 
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant mb-6">
+      {/*
+        Ô chọn hai mục — cùng kiểu với "Hộp thư | Đơn hàng" ở thẻ Đang làm (rà soát lượt 2, T8: bản cũ là hàng thẻ gạch
+        chân lồng trong thẻ "Hướng dẫn AI", trông như thẻ trong thẻ). Mỗi mục lưu riêng phần của nó.
+      */}
+      <div className="inline-flex rounded-xl border border-outline-variant p-1 mb-6 bg-surface-container">
         {/*
           Thứ tự theo đúng đường đi của một khách hàng:
           bình luận → kịch bản bắt được → gửi tin đầu → khách trả lời → LÚC ĐÓ
@@ -1264,11 +1267,10 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
           <button
             key={o.id}
             onClick={() => setTab(o.id)}
-            className={clsx('px-6 py-3 font-bold text-sm transition-colors',
-              tab === o.id
-                ? 'text-primary border-b-2 border-primary bg-primary/5'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50')}
+            className={clsx('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition',
+              tab === o.id ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:text-on-surface')}
           >
+            <span className="material-symbols-outlined text-[18px]">{o.id === 'cmt' ? 'comment' : 'chat'}</span>
             {o.ten}
           </button>
         ))}
@@ -1295,9 +1297,9 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               Nút "Vai trò AI" cũng bỏ khỏi đây: nó mở hộp thoại trùng hoàn toàn
               với tab Huấn luyện — cùng ô lời dặn, cùng danh sách tài liệu.
             */}
-            <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">
+            <h2 className="text-xl font-bold text-on-surface">
               {tab === 'cmt' ? 'Trả lời bình luận' : 'Tin nhắn Messenger'}
-            </h1>
+            </h2>
             <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase">
               {activeScriptCount} KỊCH BẢN ĐANG CHẠY
             </span>
@@ -1318,7 +1320,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
           {dsHienThi.length > 0 && (
           <button 
             onClick={openComposer}
-            className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
+            className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Tạo kịch bản
@@ -1416,7 +1418,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
 
           <button
             onClick={openComposer}
-            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
+            className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">add</span>
             Tạo câu trả lời đầu tiên
@@ -1505,7 +1507,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-7 pt-6 border-t border-outline-variant">
             <button
               onClick={openComposer}
-              className="shrink-0 px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
+              className="shrink-0 px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform flex items-center gap-2"
             >
               <span className="material-symbols-outlined text-[20px]">add</span>
               Tạo lời mở đầu

@@ -59,6 +59,16 @@
   --color-outline-variant: rgb(0 229 255 / 0.34);
   
   --color-error: #ef4444;
+
+  /*
+   * MÀU THEO MỨC QUAN TRỌNG (kế hoạch giao diện lượt 2, bảng B — chủ dự án đồng ý): cho thứ độc lập, không thuộc miền
+   * nào. Đỏ = lỗi / xoá / mất kết nối · hồng = cần làm ngay · cam = cảnh báo · lam = thông tin. Thành công dùng dấu ✓
+   * chữ trắng — không dùng lục để khỏi lẫn với ③ AI Bán hàng.
+   */
+  --color-loi: #f87171;
+  --color-gap: #f472b6;
+  --color-canh-bao: #fb923c;
+  --color-thong-tin: #60a5fa;
   --color-on-error: #450a0a;
   --color-error-container: #7f1d1d;
   --color-on-error-container: #fca5a5;
@@ -246,7 +256,27 @@ textarea::placeholder {
     --color-primary-container: var(--color-secondary-container);
     --color-on-primary-container: var(--color-on-secondary-container);
   }
+  /*
+   * MÀU THEO MIỀN (bảng A — chủ dự án đồng ý): mọi chỗ thuộc miền nào dùng màu miền đó — nút chính, viền khung, chip,
+   * thẻ đang chọn, hộp thoại. Đặt lớp .mien-* ở vùng nội dung (App.tsx theo đường dẫn) là mọi `primary` bên trong đổi
+   * theo, không sửa từng nút. Nguồn tên miền ↔ AI: src/lib/bon-ai.ts.
+   */
+  .mien-dieu-hanh, .mien-noi-dung, .mien-quang-cao, .mien-ban-hang, .mien-he-thong {
+    --color-primary: var(--mien);
+    --color-on-primary: var(--tren-mien);
+    --color-primary-container: color-mix(in srgb, var(--mien) 28%, #050c0e);
+    --color-on-primary-container: color-mix(in srgb, var(--mien) 35%, white);
+    --color-outline-variant: color-mix(in srgb, var(--mien) 32%, transparent);
+  }
+  .mien-dieu-hanh { --mien: #22d3ee; --tren-mien: #003640; }
+  .mien-noi-dung  { --mien: #a78bfa; --tren-mien: #1e1240; }
+  .mien-quang-cao { --mien: #facc15; --tren-mien: #2a2100; }
+  .mien-ban-hang  { --mien: #34d399; --tren-mien: #04281b; }
+  /* Trang hệ thống: trung tính, không tranh màu với 4 AI. */
+  .mien-he-thong  { --mien: #e2e8f0; --tren-mien: #0b1417; --color-outline-variant: rgb(203 213 225 / 0.26); }
+
   .mau-xanh { --mau: #22d3ee; }
+  .mau-vang { --mau: #facc15; }
   .mau-tim { --mau: #a78bfa; }
   .mau-cam { --mau: #fbbf24; }
   .mau-luc { --mau: #34d399; }

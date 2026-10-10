@@ -749,7 +749,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
           </button>
           <button 
             onClick={moHopSoanBai}
-            className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
+            className="shrink-0 px-4 py-2 bg-primary text-on-primary font-bold rounded-lg hover:scale-105 transition-transform flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Tạo bài mới
@@ -757,66 +757,39 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
         </div>
       </div>
 
-      {/* Row 1: Mode Selection Card */}
-      <div className="bg-surface-container border-2 border-primary/40 rounded-2xl p-6 mb-8 relative overflow-hidden group hover:border-primary/60 transition-colors shadow-[0_0_30px_rgba(0,229,255,0.05)]">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-bl-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
-        <div className="flex flex-col lg:flex-row lg:items-center gap-8 relative z-10">
-          <div className="flex-1">
-            <span className="tieu-de-muc mb-2 block">CHẾ ĐỘ ĐĂNG BÀI</span>
-            <h2 className="text-xl font-bold text-on-surface mb-2">{postMode === 'manual' ? 'AI đang chờ bạn duyệt' : 'AI đang tự động đăng bài'}</h2>
-            <p className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-line">
-              {postMode === 'manual' 
-                ? 'AI viết xong sẽ đưa vào mục chờ duyệt.\nBài chỉ lên sóng khi bạn bấm duyệt.'
-                : 'AI sẽ tự viết và tự động lên lịch/đăng bài.\nBạn có thể xem lại trong mục Đã lên lịch hoặc Đã đăng.'}
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-4 shrink-0 lg:w-[500px]">
-            <div 
-              onClick={() => savePostMode('manual')}
-              className={clsx(
-                "flex-1 p-4 rounded-xl border cursor-pointer transition-all",
-                postMode === 'manual' 
-                  ? "bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(0,229,255,0.2)]" 
-                  : "bg-surface-container border-outline-variant hover:border-primary/50 text-on-surface-variant"
-              )}
+      {/*
+        Chế độ đăng cho BÀI BẠN TỰ SOẠN — một dòng, ghi rõ phạm vi. Bài AI tự viết theo lịch cài riêng ở khung bên dưới
+        (AutoPilotPanel). Bản cũ là thẻ to không ghi phạm vi nên trông như hai chỗ cài cùng một việc (rà soát lượt 2, T5).
+      */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3 rounded-xl border border-outline-variant bg-surface-container px-4 py-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-on-surface">Bài bạn tự soạn</p>
+          <p className="text-xs text-on-surface-variant">
+            {postMode === 'manual' ? 'Bấm "Đăng ngay" thì bài vào mục Chờ duyệt, chỉ lên sóng khi bạn duyệt.' : 'Bấm "Đăng ngay" là bài lên sóng luôn, không qua bước duyệt.'}
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-outline-variant overflow-hidden shrink-0" role="radiogroup" aria-label="Chế độ đăng bài tự soạn">
+          {([['manual', 'Chờ tôi duyệt'], ['auto', 'Đăng luôn']] as const).map(([ma, ten]) => (
+            <button
+              key={ma}
+              role="radio"
+              aria-checked={postMode === ma}
+              onClick={() => (ma === 'manual' ? savePostMode('manual') : handleAutoModeSelect())}
+              className={clsx('px-4 py-2 text-sm font-bold transition-colors',
+                postMode === ma ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-on-surface')}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className={clsx("font-bold text-sm", postMode === 'manual' ? "text-primary" : "text-on-surface")}>Chờ tôi duyệt</span>
-                {postMode === 'manual' && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
-              </div>
-              <p className="text-xs opacity-80">An toàn hơn, bạn kiểm soát mọi bài</p>
-              {postMode === 'manual' && <span className="inline-block mt-3 text-[10px] font-bold px-2 py-0.5 bg-primary/20 rounded-sm uppercase tracking-wider">ĐANG ĐƯỢC CHỌN</span>}
-            </div>
-
-            <div 
-              onClick={handleAutoModeSelect}
-              className={clsx(
-                "flex-1 p-4 rounded-xl border cursor-pointer transition-all",
-                postMode === 'auto' 
-                  ? "bg-primary/10 border-primary text-primary shadow-[0_0_15px_rgba(0,229,255,0.2)]" 
-                  : "bg-surface-container border-outline-variant hover:border-primary/50 text-on-surface-variant"
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className={clsx("font-bold text-sm", postMode === 'auto' ? "text-primary" : "text-on-surface")}>AI tự đăng luôn</span>
-                {postMode === 'auto' && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
-              </div>
-              <p className="text-xs opacity-80">Nhanh hơn, không cần bạn can thiệp</p>
-              {postMode === 'auto' && <span className="inline-block mt-3 text-[10px] font-bold px-2 py-0.5 bg-primary/20 rounded-sm uppercase tracking-wider">ĐANG ĐƯỢC CHỌN</span>}
-            </div>
-          </div>
+              {ten}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Lịch AI tự viết và tự đăng — phần làm cho thẻ "AI tự đăng luôn" ở trên
-          nói đúng sự thật. Thẻ đó chỉ quyết định có bỏ bước duyệt hay không khi
-          chủ shop TỰ soạn bài; còn việc AI tự làm theo lịch thì cài ở đây. */}
+      {/* Lịch AI tự viết và tự đăng — bài AI tự làm theo lịch cài ở đây (khác dòng "Bài bạn tự soạn" ở trên). */}
       <AutoPilotPanel onSaved={fetchPosts} />
 
       {/* Row 2: Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-yellow-500/10 blur-2xl rounded-full group-hover:bg-yellow-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">CHỜ DUYỆT</h3>
             <div className="flex items-baseline gap-2">
@@ -826,8 +799,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
           </div>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 blur-2xl rounded-full group-hover:bg-blue-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐÃ LÊN LỊCH</h3>
             <div className="flex items-baseline gap-2">
@@ -837,8 +809,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
           </div>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 blur-2xl rounded-full group-hover:bg-primary/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐÃ ĐĂNG TUẦN NÀY</h3>
             <div className="flex items-baseline gap-2">
@@ -853,8 +824,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
           )}
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors h-[140px]">
-          <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/10 blur-2xl rounded-full group-hover:bg-purple-500/20 transition-colors"></div>
+        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
           <div>
             <h3 className="tieu-de-muc mb-1">TƯƠNG TÁC TRUNG BÌNH</h3>
             <div className="flex items-baseline gap-2">
@@ -878,7 +848,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
               className={clsx(
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors border",
                 isActive 
-                  ? "bg-primary text-on-primary border-primary shadow-[0_0_10px_rgba(0,229,255,0.2)]" 
+                  ? "bg-primary text-on-primary border-primary" 
                   : "bg-surface-container text-on-surface-variant border-outline-variant hover:bg-surface-container hover:text-on-surface"
               )}
             >
@@ -898,21 +868,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
                 {/* Bài chờ video AI xong rồi máy chủ tự đăng — duyệt tay lúc này sẽ đăng thiếu video nên ẩn nút duyệt. */}
                 {post.cho_video_id ? 'ĐANG TẠO VIDEO AI · XONG TỰ ĐĂNG' : POST_STATUS_LABELS[post.status].toUpperCase()}
               </span>
-              <div className="flex gap-2">
-                {post.status === 'pending_approval' && !post.cho_video_id && (
-                  <>
-                    <button onClick={() => handleApprove(post.id)} className="text-green-500 hover:bg-green-500/10 p-1 rounded-md transition-colors" title="Duyệt đăng">
-                      <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    </button>
-                    <button onClick={() => handleSchedule(post.id)} className="text-blue-500 hover:bg-blue-500/10 p-1 rounded-md transition-colors" title="Lên lịch">
-                      <span className="material-symbols-outlined text-[18px]">schedule</span>
-                    </button>
-                  </>
-                )}
-                <button onClick={() => handleDelete(post.id)} className="text-error hover:bg-error/10 p-1 rounded-md transition-colors" title="Xóa">
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                </button>
-              </div>
+              {/* Nút thao tác chỉ ở chân thẻ — bản cũ có thêm bộ ✓ ⏱ 🗑 ở đầu thẻ làm đúng việc đó (rà soát lượt 2, T4). */}
             </div>
 
             {/*
@@ -970,9 +926,13 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
             <div className="p-4 bg-surface-container border-t border-outline-variant/50 flex gap-2 shrink-0 mt-auto">
               {post.status === 'pending_approval' && (
                 <>
-                  <button onClick={() => handleApprove(post.id)} disabled={busyPostId === post.id} className="flex-1 py-2 bg-primary text-on-primary font-bold text-xs rounded-lg hover:brightness-110 transition-all shadow-sm disabled:opacity-60">{busyPostId === post.id ? 'Đang đăng…' : 'Duyệt và đăng'}</button>
+                  {/* Bài chờ video AI xong rồi máy chủ tự đăng — duyệt tay lúc này sẽ đăng thiếu video nên ẩn nút duyệt. */}
+                  {!post.cho_video_id && <button onClick={() => handleApprove(post.id)} disabled={busyPostId === post.id} className="flex-1 py-2 bg-primary text-on-primary font-bold text-xs rounded-lg hover:brightness-110 transition-all shadow-sm disabled:opacity-60">{busyPostId === post.id ? 'Đang đăng…' : 'Duyệt và đăng'}</button>}
                   <button onClick={() => handleEditPost(post)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Sửa</button>
-                  <button onClick={() => handleDelete(post.id)} className="w-9 shrink-0 flex items-center justify-center bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors border border-error/20">
+                  <button onClick={() => handleSchedule(post.id)} title="Lên lịch" className="w-9 shrink-0 flex items-center justify-center bg-surface-variant text-on-surface rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">
+                    <span className="material-symbols-outlined text-[16px]">schedule</span>
+                  </button>
+                  <button onClick={() => handleDelete(post.id)} title="Xoá bài" className="w-9 shrink-0 flex items-center justify-center bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors border border-error/20">
                     <span className="material-symbols-outlined text-[16px]">delete</span>
                   </button>
                 </>
@@ -982,13 +942,19 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
                   <button onClick={() => handleSchedule(post.id, post.scheduled_for)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Đổi lịch</button>
                   <button onClick={() => handleCancelSchedule(post.id)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Hủy lịch</button>
                   <button onClick={() => handleEditPost(post)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Sửa</button>
+                  <button onClick={() => handleDelete(post.id)} title="Xoá bài" className="w-9 shrink-0 flex items-center justify-center bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors border border-error/20">
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                  </button>
                 </>
               )}
               {post.status === 'published' && (
                 <div className="flex flex-col gap-2 w-full">
                   <div className="flex gap-2">
-                    <button onClick={() => handleOpenOnPlatform(post)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Xem trên nền tảng</button>
-                    <button onClick={() => handleOpenOnPlatform(post)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Xem bình luận</button>
+                    {/* Một nút — "Xem bình luận" cũ mở đúng trang này (T4). */}
+                    <button onClick={() => handleOpenOnPlatform(post)} className="flex-1 py-2 bg-surface-variant text-on-surface font-bold text-xs rounded-lg hover:bg-outline-variant transition-colors border border-outline-variant/50">Xem bài và bình luận trên nền tảng</button>
+                  <button onClick={() => handleDelete(post.id)} title="Xoá bài" className="w-9 shrink-0 flex items-center justify-center bg-error/10 text-error rounded-lg hover:bg-error/20 transition-colors border border-error/20">
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                  </button>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleEditPost(post)} className="flex-1 py-2 bg-primary/10 text-primary font-bold text-xs rounded-lg hover:bg-primary/20 transition-colors border border-primary/30">Sửa chữ</button>

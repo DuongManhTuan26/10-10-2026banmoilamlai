@@ -5,7 +5,7 @@ import {
   type Conversation, type ConversationDetail,
 } from '../lib/api';
 import { useActivePage } from '../lib/ActivePage';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import BangLoi from '../components/BangLoi';
 import HopThoai, { NHAN_O, NUT_CHINH, NUT_PHU, O_NHAP } from '../components/HopThoai';
 
@@ -36,7 +36,6 @@ function displayStatus(conv: Conversation): DisplayStatus {
 }
 
 export default function Inbox() {
-  const navigate = useNavigate();
   const { accounts, activeAccountId, setActiveAccountId } = useActivePage();
 
   const [activeTab, setActiveTab] = useState('Tất cả');
@@ -80,7 +79,8 @@ export default function Inbox() {
   const [syncing, setSyncing] = useState(false);
 
   /** Kênh đang xem trên thanh trên; mặc định theo trang đang chọn ở menu. */
-  const activeAccount = accounts.find((a) => a.id === activeAccountId) ?? accounts[0] ?? null;
+  // null = mọi kênh của trang (mặc định) — trang có nhiều kênh thì xem chung một hộp thư, lọc kênh khi cần.
+  const activeAccount = accounts.find((a) => a.id === activeAccountId) ?? null;
 
   const TAB_STATUS: Record<string, string> = {
     'Tất cả': 'all',
@@ -517,40 +517,30 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* Top Menu Bar: Connected Accounts (Horizontal) */}
-      <nav className="h-[52px] bg-surface-container-low border-b border-outline-variant/50 flex items-center px-4 shrink-0 overflow-x-auto no-scrollbar gap-2 z-10">
-        <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mr-1 shrink-0">Trang:</span>
-        
-        {accounts.map(acc => {
-          const platformCfg = getPlatformConfig(acc.platform);
-          const isActive = activeAccount?.id === acc.id;
-          return (
-            <button 
-              key={acc.id}
-              onClick={() => setActiveAccountId(acc.id)}
-              className={clsx(
-                "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all border shrink-0 group",
-                isActive 
-                  ? "bg-primary/10 border-primary/30 text-primary shadow-[0_0_10px_rgba(0,229,255,0.05)]" 
-                  : "bg-surface-container border-outline-variant/60 hover:bg-surface-container-high hover:border-outline-variant/50 text-on-surface-variant hover:text-on-surface"
-              )}
-            >
-              <div className={clsx(
-                "w-2 h-2 rounded-full shrink-0 shadow-sm",
-                isActive ? platformCfg.bg : "bg-surface-variant group-hover:bg-on-surface-variant/50"
-              )}></div>
-              <span className="font-semibold text-xs whitespace-nowrap">{acc.display_name || acc.username}</span>
-            </button>
-          )
-        })}
-
-        <div className="w-[1px] h-4 bg-outline-variant/50 mx-1 shrink-0"></div>
-        
-        <button onClick={() => navigate('/connections')} className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg border border-dashed border-outline-variant/80 text-xs font-medium text-on-surface-variant hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all shrink-0">
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          <span className="whitespace-nowrap">Thêm</span>
-        </button>
-      </nav>
+      {/*
+        Lọc theo KÊNH của trang — chỉ hiện khi trang có từ 2 kênh trở lên. Bản cũ là thanh "Trang:" luôn hiện, thành bộ
+        chọn thứ ba (sau bộ chọn trang ở menu và Kết nối kênh) và tự nhảy vào kênh đầu tiên (rà soát lượt 2, T3).
+        Thêm kênh ở Trang & kênh.
+      */}
+      {accounts.length > 1 && (
+        <nav className="h-[46px] bg-surface-container-low border-b border-outline-variant/50 flex items-center px-4 shrink-0 overflow-x-auto no-scrollbar gap-2 z-10">
+          {[{ id: null as string | null, ten: 'Tất cả kênh' }, ...accounts.map((a) => ({ id: a.id as string | null, ten: a.display_name || a.username }))].map((k) => {
+            const chon = (activeAccount?.id ?? null) === k.id;
+            return (
+              <button
+                key={k.id ?? 'tat-ca'}
+                onClick={() => setActiveAccountId(k.id)}
+                className={clsx(
+                  'px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors',
+                  chon ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface-variant hover:text-on-surface'
+                )}
+              >
+                {k.ten}
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       {/* Main Inbox Area (3 Panes left after removing the side menu) */}
       <div className="flex-1 flex flex-row w-full h-full overflow-hidden">
@@ -583,7 +573,7 @@ export default function Inbox() {
               >
                 {tab}
                 {activeTab === tab && (
-                  <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary shadow-[0_0_8px_rgba(0,229,255,0.8)]"></div>
+                  <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary"></div>
                 )}
               </button>
             ))}
@@ -682,21 +672,21 @@ export default function Inbox() {
                 
                 <div className="w-[1px] h-6 bg-outline-variant/50 mx-1"></div>
                 
+                {/*
+                  MỘT nút đổi người trả lời (bản cũ có "Dừng AI" và "Người chat" cùng gọi handleTakeover — rà soát lượt 2,
+                  T3): AI đang trả lời → "Tôi tiếp quản"; người đang trả lời → "Trả cho AI".
+                */}
                 {selectedConv.aiHandling ? (
-                  <button onClick={handleTakeover} className="px-3 py-1.5 bg-error/10 text-error hover:bg-error hover:text-white font-bold text-xs rounded-md transition-colors flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[16px]">stop_circle</span>
-                    <span className="hidden sm:inline">Dừng AI</span>
+                  <button onClick={handleTakeover} className="px-3 py-1.5 border border-primary text-primary hover:bg-primary hover:text-on-primary font-bold text-xs rounded-md transition-colors flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px]">person</span>
+                    <span className="hidden sm:inline">Tôi tiếp quản</span>
                   </button>
                 ) : (
-                  <button onClick={handleGiveBackToAi} className="px-3 py-1.5 bg-surface-container text-on-surface-variant hover:text-primary border border-outline-variant/50 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5">
+                  <button onClick={handleGiveBackToAi} className="px-3 py-1.5 border border-outline-variant text-on-surface-variant hover:text-on-surface font-bold text-xs rounded-md transition-colors flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[16px]">smart_toy</span>
                     <span className="hidden sm:inline">Trả cho AI</span>
                   </button>
                 )}
-                <button onClick={handleTakeover} className="px-3 py-1.5 bg-primary text-on-primary font-bold text-xs rounded-md hover:brightness-110 transition-colors shadow-sm flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px]">person</span>
-                  <span className="hidden sm:inline">Người chat</span>
-                </button>
               </div>
             </div>
 
@@ -784,11 +774,11 @@ export default function Inbox() {
                       "px-4 py-2.5 rounded-2xl relative shadow-sm",
                       isShop 
                         ? isAI 
-                          ? "bg-surface-container-highest text-on-surface rounded-tr-sm border border-primary/20 before:absolute before:inset-0 before:rounded-2xl before:border before:border-primary/10 before:pointer-events-none before:shadow-[inset_0_0_15px_rgba(0,229,255,0.05)]" 
+                          ? "bg-surface-container-highest text-on-surface rounded-tr-sm border border-primary/20 before:absolute before:inset-0 before:rounded-2xl before:border before:border-primary/10 before:pointer-events-none before:" 
                           : "bg-primary text-on-primary rounded-tr-sm"
                         : "bg-surface-variant text-on-surface rounded-tl-sm border border-outline-variant/60"
                     )}>
-                      {isAI && <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary shadow-[0_0_5px_rgba(0,229,255,0.8)]"></div>}
+                      {isAI && <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary"></div>}
                       <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                     </div>
                   </div>
@@ -809,8 +799,8 @@ export default function Inbox() {
                 <button
                   onClick={handleExtractInfo}
                   disabled={isExtracting}
-                  title="Nhờ AI bóc tách thông tin lên đơn từ hội thoại"
-                  className="p-2 text-on-surface-variant hover:text-primary transition-colors shrink-0 disabled:opacity-50"
+                  title="Nhờ AI bóc tách thông tin lên đơn từ hội thoại (trùng nút Quét lại của cột thông tin — chỉ hiện dưới lg, nơi cột đó ẩn)"
+                  className="lg:hidden p-2 text-on-surface-variant hover:text-primary transition-colors shrink-0 disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-[20px]">{isExtracting ? 'sync' : 'add_circle'}</span>
                 </button>
@@ -846,7 +836,7 @@ export default function Inbox() {
                 <button
                   onClick={handleSend}
                   disabled={!selectedConv.canSend || sending || !draft.trim()}
-                  className="w-10 h-10 ml-1 bg-primary text-on-primary rounded-lg hover:brightness-110 transition-colors flex items-center justify-center shrink-0 shadow-[0_2px_10px_rgba(0,229,255,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-10 h-10 ml-1 bg-primary text-on-primary rounded-lg hover:brightness-110 transition-colors flex items-center justify-center shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="material-symbols-outlined text-[18px] ml-0.5">{sending ? 'sync' : 'send'}</span>
                 </button>
@@ -934,20 +924,12 @@ export default function Inbox() {
               <div className="flex flex-col gap-2">
                 <button 
                   onClick={openOrderModal}
-                  className="w-full py-2.5 text-xs font-bold bg-primary text-on-primary rounded-lg shadow-[0_4px_10px_rgba(0,229,255,0.2)] hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-2.5 text-xs font-bold bg-primary text-on-primary rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[16px]">receipt_long</span>
                   Tạo đơn hàng
                 </button>
-                <button
-                  onClick={() => selectedConv?.externalUrl
-                    ? window.open(selectedConv.externalUrl, '_blank', 'noopener,noreferrer')
-                    : setErrorMessage('Nền tảng chưa cung cấp đường dẫn cho hội thoại này.')}
-                  className="w-full py-2.5 text-xs font-bold text-on-surface-variant bg-surface-container border border-outline-variant/60 hover:text-on-surface hover:bg-surface-variant rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                  Xem trên nền tảng
-                </button>
+                {/* "Xem trên nền tảng" đã có ở ô soạn tin (biểu tượng mở ngoài) — bỏ nút trùng (T3). */}
               </div>
             </div>
           </aside>

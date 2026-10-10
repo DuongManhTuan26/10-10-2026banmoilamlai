@@ -212,8 +212,8 @@ export default function AutoPilotPanel({ onSaved }: AutoPilotPanelProps) {
       className={clsx(
         'relative rounded-2xl mb-8 overflow-hidden border-2 transition-colors',
         cau.enabled
-          ? 'bg-primary/[0.07] border-primary shadow-[0_0_40px_rgba(0,229,255,0.18)]'
-          : 'bg-surface-container border-primary/45 shadow-[0_0_30px_rgba(0,229,255,0.08)] hover:border-primary/70'
+          ? 'bg-primary/[0.07] border-primary'
+          : 'bg-surface-container border-primary/45 hover:border-primary/70'
       )}
     >
       {/* Quầng sáng nền, giống thẻ chọn chế độ ở trên cho đồng bộ */}
@@ -226,7 +226,7 @@ export default function AutoPilotPanel({ onSaved }: AutoPilotPanelProps) {
             className={clsx(
               'w-12 h-12 rounded-full flex items-center justify-center shrink-0 border transition-all',
               cau.enabled
-                ? 'bg-primary/20 border-primary shadow-[0_0_20px_rgba(0,229,255,0.45)]'
+                ? 'bg-primary/20 border-primary'
                 : 'bg-primary/10 border-primary/40'
             )}
           >
@@ -291,7 +291,7 @@ export default function AutoPilotPanel({ onSaved }: AutoPilotPanelProps) {
             className={clsx(
               'relative w-14 h-8 rounded-full transition-colors shrink-0 border',
               cau.enabled
-                ? 'bg-primary border-primary shadow-[0_0_16px_rgba(0,229,255,0.5)]'
+                ? 'bg-primary border-primary'
                 : 'bg-surface-container border-primary/40 hover:border-primary/70'
             )}
             title={cau.enabled ? 'Tắt lịch tự động' : 'Bật lịch tự động'}
@@ -631,7 +631,7 @@ export default function AutoPilotPanel({ onSaved }: AutoPilotPanelProps) {
             <button
               onClick={luu}
               disabled={dangLuu}
-              className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100 flex items-center gap-2"
+              className="px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-60 disabled:hover:scale-100 flex items-center gap-2"
             >
               {dangLuu && (
                 <span className="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />

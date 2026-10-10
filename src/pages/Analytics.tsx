@@ -158,13 +158,13 @@ export default function Analytics({ trongKhuon = false }: { trongKhuon?: boolean
         )}
 
         {/* AI Analysis Panel */}
-        <div className="mb-gutter bg-gradient-to-r from-primary/10 via-surface-container-high to-surface-container rounded-2xl border border-primary/30 p-6 shadow-[0_0_30px_rgba(0,229,255,0.05)] relative overflow-hidden">
+        <div className="mb-gutter bg-gradient-to-r from-primary/10 via-surface-container-high to-surface-container rounded-2xl border border-primary/30 p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none translate-x-1/2 -translate-y-1/2"></div>
           
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary shadow-[0_0_15px_rgba(0,229,255,0.2)]">
+                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[24px]">auto_awesome</span>
                 </div>
                 <h3 className="text-lg font-bold text-on-surface tracking-wide">AI Phân Tích Hiệu Suất</h3>
@@ -212,7 +212,7 @@ export default function Analytics({ trongKhuon = false }: { trongKhuon?: boolean
               disabled={isAnalyzing || !hasAnyData}
               className={clsx(
                 "shrink-0 px-6 py-3 rounded-xl font-bold text-sm tracking-wide transition-all shadow-lg flex items-center gap-2",
-                (isAnalyzing || !hasAnyData) ? "bg-surface-variant text-on-surface-variant cursor-not-allowed" : "bg-primary text-on-primary hover:brightness-110 shadow-[0_0_20px_rgba(0,229,255,0.3)]"
+                (isAnalyzing || !hasAnyData) ? "bg-surface-variant text-on-surface-variant cursor-not-allowed" : "bg-primary text-on-primary hover:brightness-110"
               )}
             >
               {isAnalyzing ? (

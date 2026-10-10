@@ -4,12 +4,13 @@ import { clsx } from 'clsx';
 import { api, ApiError, type Platform, type SocialAccount } from '../lib/api';
 import { useActivePage } from '../lib/ActivePage';
 import { hoiXacNhan } from '../components/HopHoi';
+import BangTrangBanHang from '../components/BangTrangBanHang';
 
 // Mỗi lượt kết nối chọn một trang. Chưa phải hạn mức theo gói.
 const MOI_LUOT_MOT_TRANG = 1;
 
 export default function Connections() {
-  const { reload: reloadActivePages } = useActivePage();
+  const { reload: reloadActivePages, nao } = useActivePage();
 
   const [connectStep, setConnectStep] = useState(0); // 0 = đóng, 1-4 = các bước
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
@@ -149,19 +150,6 @@ export default function Connections() {
     }
   };
 
-  const handleDisconnectAccount = async (platformId: string) => {
-    const target = accounts.filter((a) => a.platform === platformId);
-    if (target.length === 0) return;
-    if (!(await hoiXacNhan({ tieuDe: `Ngắt kết nối ${target.length} tài khoản của kênh này?`, nutDongY: 'Ngắt kết nối', nguyHiem: true }))) return;
-    try {
-      for (const account of target) await api.connections.disconnect(account.id);
-      await load();
-      await reloadActivePages();
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : 'Không ngắt kết nối được');
-    }
-  };
-
   const handleDisconnectPage = async (accountId: string) => {
     if (!(await hoiXacNhan({ tieuDe: 'Ngắt kết nối trang này?', nutDongY: 'Ngắt kết nối', nguyHiem: true }))) return;
     try {
@@ -174,6 +162,9 @@ export default function Connections() {
   };
 
   const allPlatforms = [...catalog.social, ...catalog.ads, ...catalog.communication];
+  /** Kênh đang mở chi tiết (quyền + thao tác) trong bảng kênh. */
+  const [kenhMo, setKenhMo] = useState<string | null>(null);
+  const soKenhHong = accounts.filter((a) => a.needs_reconnection || !a.connected).length;
   const connectedPlatformCount = allPlatforms.filter((c) => c.connected).length;
   const connectablePlatformCount = allPlatforms.filter((c) => c.connectable).length;
   const activePageCount = accounts.filter((a) => a.connected && a.platform !== 'metaads').length;
@@ -209,45 +200,6 @@ export default function Connections() {
     }))
     .filter((a) => a.conLaiNgay <= 7)
     .sort((a, b) => a.conLaiNgay - b.conLaiNgay);
-
-  /** Gom tài khoản theo kênh để dựng khối "Tài khoản đã kết nối". */
-  const accountsByPlatform: Record<string, SocialAccount[]> = {};
-  for (const account of accounts) {
-    (accountsByPlatform[account.platform] ??= []).push(account);
-  }
-
-  const liveConnectedAccounts = Object.entries(accountsByPlatform).map(([platform, list]) => {
-    const channel = allPlatforms.find((c) => c.platformKey === platform)
-      ?? allPlatforms.find((c) => c.id === 'fb_ads' && platform === 'metaads');
-    return {
-      id: platform + '_acc',
-      platformId: platform,
-      platformName: channel?.name ?? platform,
-      platformIcon: channel?.icon ?? 'public',
-      accountName: list[0].display_name || list[0].username,
-      connectionDate: new Date(list[0].last_synced_at ?? Date.now()).toLocaleDateString('vi-VN'),
-      expiryDate: list[0].token_expires_at
-        ? new Date(list[0].token_expires_at).toLocaleDateString('vi-VN')
-        : 'Không giới hạn',
-      status: list.some((a) => a.needs_reconnection)
-        ? 'Mất kết nối'
-        : list.every((a) => a.connected) ? 'Đang hoạt động' : 'Mất kết nối',
-      permissions: [
-        { name: 'Đăng bài', granted: channel?.canPost ?? false },
-        { name: 'Đọc và trả lời tin nhắn', granted: channel?.canDm ?? false },
-        { name: 'Đọc và trả lời bình luận', granted: channel?.canComment ?? false },
-      ],
-      pages: list.map((a) => ({
-        id: a.id,
-        name: a.display_name || a.username,
-        avatar: a.profile_picture
-          ?? 'https://ui-avatars.com/api/?name=' + encodeURIComponent(a.display_name || a.username) + '&background=random',
-        status: a.needs_reconnection ? 'Mất kết nối' : a.connected ? 'Đang hoạt động' : 'Mất kết nối',
-        messagesProcessed: 0,
-        commentsReplied: 0,
-      })),
-    };
-  });
 
   const liveSocialChannels = catalog.social;
   const liveAdChannels = catalog.ads;
@@ -292,8 +244,6 @@ export default function Connections() {
    * hỗ trợ đều kết nối qua OAuth nên bước này không còn được dùng tới.
    */
   const accessCode = 'ZRN-' + (selectedPlatform?.id ?? '').toUpperCase().padEnd(6, 'X').slice(0, 6);
-
-  const topGridRef = useRef<HTMLDivElement>(null);
 
   const handleOpenConnect = (platform?: Platform) => {
     setErrorMessage('');
@@ -490,26 +440,6 @@ export default function Connections() {
     setSelectedPages([]);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Đang hoạt động': return 'bg-green-500/10 text-green-400 border-green-500/20';
-      case 'Sắp hết hạn': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-      case 'Mất kết nối': return 'bg-error/10 text-error border-error/20';
-      case 'Thiếu quyền': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-      default: return 'bg-surface-variant text-on-surface border-outline-variant';
-    }
-  };
-
-  const getStatusDot = (status: string) => {
-    switch (status) {
-      case 'Đang hoạt động': return 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]';
-      case 'Sắp hết hạn': return 'bg-yellow-400';
-      case 'Mất kết nối': return 'bg-error';
-      case 'Thiếu quyền': return 'bg-orange-400';
-      default: return 'bg-on-surface-variant';
-    }
-  };
-
   /**
    * Băng thông báo lỗi.
    *
@@ -540,7 +470,7 @@ export default function Connections() {
   ) : null;
 
   return (
-    <main className="flex-1   p-8 relative  ">
+    <main className="p-4 md:p-8 max-w-[1600px] mx-auto w-full relative">
 
       {errorBanner && <div className="mb-6">{errorBanner}</div>}
 
@@ -620,430 +550,144 @@ export default function Connections() {
         </HopThoai>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">Kết nối</h1>
-            <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase">
-              {connectedPlatformCount}/{connectablePlatformCount} KÊNH ĐÃ KẾT NỐI
-            </span>
-          </div>
-          <p className="text-on-surface-variant text-sm">Kết nối các kênh bán hàng để AI bắt đầu làm việc cho bạn</p>
-        </div>
-        <button 
-          onClick={() => handleOpenConnect()}
-          className="shrink-0 px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
-        >
+      {/*
+        TRANG & KÊNH (rà soát giao diện lượt 2 — T1, T6, §3): nơi DUY NHẤT chọn khối não và nối kênh.
+        - Bỏ lưới 20 thẻ "Các kênh có thể kết nối" (trùng hộp "Bạn muốn kết nối nền tảng nào?") → nút "Kết nối kênh".
+        - Bỏ ô chọn trang ở thanh menu → bảng "Trang bán hàng" (tìm, lọc, gom theo tài khoản, 25 dòng mỗi trang).
+        - Thẻ tài khoản 520px → mỗi kênh một dòng; bấm dòng mới hiện quyền đã cấp và các nút thao tác.
+      */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        <p className="text-on-surface-variant text-sm">Chọn trang bán hàng để mở khối não của nó, và nối các kênh cho trang đang mở.</p>
+        <button onClick={() => handleOpenConnect()} className={clsx(NUT_CHINH, 'h-11 px-5 text-sm shrink-0')}>
           <span className="material-symbols-outlined text-[20px]">add</span>
-          Kết nối kênh mới
+          Kết nối kênh
         </button>
       </div>
 
-      <div ref={topGridRef} />
-
-      {/* Row 1: Status Banners */}
-      <div className="mb-8">
-        {bannerState === 'normal' && !taiThatBai && (
-          <div className="bg-surface-container border border-primary/30 shadow-[0_0_20px_rgba(0,229,255,0.05)] rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[80px] -z-10 rounded-full"></div>
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0 border border-primary/20">
-              <span className="material-symbols-outlined text-primary text-[24px]">shield</span>
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-on-surface mb-0.5">Tất cả kết nối đang hoạt động tốt</h3>
-              <p className="text-sm text-on-surface-variant font-medium">AI đang chạy trên {activePageCount} trang</p>
-            </div>
-          </div>
-        )}
-
-        {bannerState === 'warning' && (
-          <div className="bg-yellow-500/5 border border-yellow-500/30 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center shrink-0 border border-yellow-500/20">
-                <span className="material-symbols-outlined text-yellow-400 text-[24px]">warning</span>
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-yellow-400 mb-0.5">{`Có ${ketNoiSapHetHan.length} kết nối sắp hết hạn`}</h3>
-                <p className="text-sm text-on-surface-variant font-medium">
-                  {ketNoiSapHetHan.length === 1
-                    ? `Kênh ${ketNoiSapHetHan[0].ten} sẽ hết hạn sau ${ketNoiSapHetHan[0].conLaiNgay} ngày. Nối lại để AI không bị gián đoạn.`
-                    : `${ketNoiSapHetHan.length} kênh sắp hết hạn. Nối lại để AI không bị gián đoạn.`}
-                </p>
-              </div>
-            </div>
-            <button onClick={handleSync} disabled={syncing} className="shrink-0 px-5 py-2.5 bg-yellow-500 text-[#18181B] font-bold rounded-xl shadow-[0_4px_15px_rgba(234,179,8,0.3)] hover:scale-105 transition-transform whitespace-nowrap disabled:opacity-60 disabled:hover:scale-100">
+      {/* Tình trạng chung — một dòng, màu theo mức quan trọng (đỏ mất kết nối · cam sắp hết hạn · ✓ trắng ổn). */}
+      {!taiThatBai && (
+        <div className={clsx(
+          'mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border px-4 py-3',
+          bannerState === 'danger' ? 'border-loi/50 bg-loi/10' : bannerState === 'warning' ? 'border-canh-bao/50 bg-canh-bao/10' : 'border-outline-variant bg-surface-container'
+        )}>
+          <span className={clsx('material-symbols-outlined shrink-0',
+            bannerState === 'danger' ? 'text-loi' : bannerState === 'warning' ? 'text-canh-bao' : 'text-on-surface')}>
+            {bannerState === 'danger' ? 'gpp_bad' : bannerState === 'warning' ? 'warning' : 'check_circle'}
+          </span>
+          <p className="flex-1 text-sm text-on-surface">
+            {bannerState === 'danger'
+              ? <><b className="text-loi">{soKenhHong} kênh mất kết nối</b> — AI không trả lời được trên kênh đó cho tới khi nối lại. Tin của khách vẫn được lưu.</>
+              : bannerState === 'warning'
+                ? <><b className="text-canh-bao">{ketNoiSapHetHan.length} kết nối sắp hết hạn</b>{ketNoiSapHetHan.length === 1 ? ` — ${ketNoiSapHetHan[0].ten} còn ${ketNoiSapHetHan[0].conLaiNgay} ngày` : ''}. Nối lại để AI không bị gián đoạn.</>
+                : <>Mọi kết nối đang hoạt động · AI chạy trên {activePageCount} kênh của trang này</>}
+          </p>
+          {bannerState !== 'normal' && (
+            <button onClick={handleSync} disabled={syncing} className={clsx(NUT_PHU, 'h-9 px-4 text-sm shrink-0')}>
               {syncing ? 'Đang kiểm tra…' : 'Kiểm tra lại kết nối'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
-        {bannerState === 'danger' && (
-          <div className="bg-error/5 border border-error/30 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-error/10 rounded-full flex items-center justify-center shrink-0 border border-error/20">
-                <span className="material-symbols-outlined text-error text-[24px]">gpp_bad</span>
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-error mb-0.5">Có 1 kết nối đã mất, AI đã tự tạm dừng trên trang đó</h3>
-                <p className="text-sm text-on-surface-variant font-medium">Tin nhắn khách vẫn được nhận và lưu lại, nhưng AI không trả lời được cho tới khi bạn kết nối lại.</p>
-              </div>
-            </div>
-            <button className="shrink-0 px-5 py-2.5 bg-error text-white font-bold rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.3)] hover:scale-105 transition-transform whitespace-nowrap" onClick={handleSync} disabled={syncing}>
-              Kết nối lại ngay
+      <BangTrangBanHang />
+
+      {/* KÊNH CỦA TRANG ĐANG MỞ — mỗi kênh một dòng. */}
+      <section className="khung-muc mb-8">
+        <h3 className="tieu-de-muc dau-muc">Kênh của trang {nao?.ten ?? ''}</h3>
+        {accounts.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="font-bold text-on-surface">Trang này chưa nối kênh nào</p>
+            <p className="text-sm text-on-surface-variant mt-1">Nối Fanpage, Instagram, TikTok… để AI bắt đầu làm việc.</p>
+            <button onClick={() => handleOpenConnect()} className={clsx(NUT_PHU, 'mt-4 h-10 text-sm')}>
+              <span className="material-symbols-outlined text-[18px]">add</span> Kết nối kênh
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Available Channels Section */}
-      <div className="mb-12">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-on-surface tracking-tight mb-2">Các kênh có thể kết nối</h2>
-          <p className="text-sm font-medium text-on-surface-variant">Mỗi kênh kết nối tính là một lượt trong gói của bạn</p>
-        </div>
-
-        <div className="space-y-10">
-          {/* Group 1 */}
-          <div>
-            <h3 className="text-lg font-bold text-on-surface flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-[20px]">share</span> 
-              Mạng xã hội
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {liveSocialChannels.map((channel) => (
-                <button
-                  key={channel.id}
-                  onClick={() => {
-                    if (channel.connected) {
-                      topGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else {
-                      handleOpenConnect(channel);
-                    }
-                  }}
-                  className={clsx(
-                    "flex items-center gap-4 p-4 rounded-2xl border text-left w-full group relative transition-all duration-300",
-                    channel.connected 
-                      ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgba(0,229,255,0.05)]" 
-                      : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                  )}
-                >
-                  <div className={clsx(
-                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-                    channel.connected ? "bg-primary/10 text-primary border border-primary/20" : "bg-on-surface/5 text-on-surface border border-outline-variant"
-                  )}>
-                    <span className="material-symbols-outlined text-[24px]">{channel.icon}</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-[15px] text-on-surface truncate">{channel.name}</span>
-                      {channel.publishOnly && (
-                        <span className="shrink-0 bg-surface-container-highest text-on-surface-variant text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded border border-outline-variant/50 flex items-center gap-0.5">
-                          <span className="material-symbols-outlined text-[10px]">edit_note</span>
-                          Chỉ đăng bài
+        ) : (
+          <div className="divide-y divide-outline-variant/60 -mx-1">
+            {accounts.map((a) => {
+              const kenh = allPlatforms.find((c) => c.platformKey === a.platform)
+                ?? allPlatforms.find((c) => c.id === 'fb_ads' && a.platform === 'metaads');
+              const tinhTrang = a.needs_reconnection ? 'Cần nối lại' : a.connected ? 'Hoạt động' : 'Mất kết nối';
+              const hong = tinhTrang !== 'Hoạt động';
+              const quyen = [
+                { ten: 'Đăng bài', co: kenh?.canPost ?? false, thieu: 'AI không đăng bài tự động được.' },
+                { ten: 'Tin nhắn', co: kenh?.canDm ?? false, thieu: 'AI không tư vấn và chốt đơn qua tin nhắn được.' },
+                { ten: 'Bình luận', co: kenh?.canComment ?? false, thieu: 'AI không trả lời bình luận được.' },
+              ];
+              const mo = kenhMo === a.id;
+              return (
+                <div key={a.id} className="px-1">
+                  <button
+                    onClick={() => setKenhMo(mo ? null : a.id)}
+                    aria-expanded={mo}
+                    className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface-container-high rounded-lg px-2 transition-colors"
+                  >
+                    {a.profile_picture
+                      ? <img src={a.profile_picture} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                      : <span className="w-9 h-9 rounded-full bg-surface-variant flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-[20px] text-on-surface-variant">{kenh?.icon ?? 'public'}</span>
+                        </span>}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-on-surface truncate">{a.display_name || a.username}</span>
+                      <span className="block text-xs text-on-surface-variant truncate">
+                        {kenh?.name ?? a.platform}
+                        {a.token_expires_at && ` · hết hạn ${new Date(a.token_expires_at).toLocaleDateString('vi-VN')}`}
+                      </span>
+                    </span>
+                    {/* Quyền: 3 dấu nhỏ — thiếu quyền nào thì dấu đó đỏ. */}
+                    <span className="hidden md:flex items-center gap-3 shrink-0">
+                      {quyen.map((q) => (
+                        <span key={q.ten} className={clsx('flex items-center gap-1 text-xs', q.co ? 'text-on-surface-variant' : 'text-loi font-bold')}>
+                          <span className="material-symbols-outlined text-[15px]">{q.co ? 'check' : 'close'}</span>{q.ten}
                         </span>
+                      ))}
+                    </span>
+                    <span className={clsx('shrink-0 text-xs font-bold px-2 py-0.5 rounded-full border',
+                      hong ? 'text-loi border-loi/50 bg-loi/10' : 'text-on-surface border-white/20')}>
+                      {hong ? tinhTrang : '✓ Hoạt động'}
+                    </span>
+                    <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0">{mo ? 'expand_less' : 'expand_more'}</span>
+                  </button>
+                  {mo && (
+                    <div className="pl-14 pr-2 pb-4 space-y-3">
+                      {hong && (
+                        <p className="text-sm text-loi">
+                          AI đã tạm dừng trên kênh này. Tin nhắn và bình luận của khách vẫn được lưu, nhưng AI không trả lời được cho tới khi nối lại.
+                        </p>
                       )}
-                      {channel.warnings && channel.warnings.length > 0 && (
-                        <span className="shrink-0 bg-orange-500/10 text-orange-400 text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded border border-orange-500/20 flex items-center gap-0.5" title={channel.warnings[0]}>
-                          <span className="material-symbols-outlined text-[10px]">warning</span>
-                          Lưu ý
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      {channel.connected ? (
-                        <>
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-                          <span className="text-[12px] font-medium text-green-400">{channel.statusText || 'Đã kết nối'}</span>
-                        </>
-                      ) : (
-                        <span className="text-[12px] font-medium text-on-surface-variant group-hover:text-on-surface transition-colors">{channel.statusText || 'Kết nối'}</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {channel.connected ? (
-                     <span className="material-symbols-outlined text-green-500 text-[20px] shrink-0">check_circle</span>
-                  ) : (
-                     <span className="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors text-[20px] shrink-0">add_circle</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Group 2 */}
-          <div>
-            <h3 className="text-lg font-bold text-on-surface flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-[20px]">campaign</span> 
-              Tài khoản quảng cáo
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-3">
-              {liveAdChannels.map((channel) => (
-                <button
-                  key={channel.id}
-                  onClick={() => {
-                    if (channel.connected) {
-                      topGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else {
-                      handleOpenConnect(channel);
-                    }
-                  }}
-                  className={clsx(
-                    "flex items-center gap-4 p-4 rounded-2xl border text-left w-full group relative transition-all duration-300",
-                    channel.connected 
-                      ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgba(0,229,255,0.05)]" 
-                      : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                  )}
-                >
-                  <div className={clsx(
-                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-                    channel.connected ? "bg-primary/10 text-primary border border-primary/20" : "bg-on-surface/5 text-on-surface border border-outline-variant"
-                  )}>
-                    <span className="material-symbols-outlined text-[24px]">{channel.icon}</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-[15px] text-on-surface truncate">{channel.name}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      {channel.connected ? (
-                        <>
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-                          <span className="text-[12px] font-medium text-green-400">{channel.statusText || 'Đã kết nối'}</span>
-                        </>
-                      ) : (
-                        <span className="text-[12px] font-medium text-on-surface-variant group-hover:text-on-surface transition-colors">{channel.statusText || 'Kết nối'}</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {channel.connected ? (
-                     <span className="material-symbols-outlined text-green-500 text-[20px] shrink-0">check_circle</span>
-                  ) : (
-                     <span className="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors text-[20px] shrink-0">add_circle</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <p className="text-sm font-medium text-on-surface-variant">Kết nối tài khoản quảng cáo để chạy và theo dõi chiến dịch ngay trong app, không cần mở trình quản lý quảng cáo riêng.</p>
-          </div>
-
-          {/* Group 3 */}
-          <div>
-            <h3 className="text-lg font-bold text-on-surface flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-[20px]">forum</span> 
-              Tin nhắn và điện thoại
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-3">
-              {liveCommChannels.map((channel) => (
-                <button
-                  key={channel.id}
-                  onClick={() => {
-                    if (channel.connected) {
-                      topGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else {
-                      handleOpenConnect(channel);
-                    }
-                  }}
-                  className={clsx(
-                    "flex items-center gap-4 p-4 rounded-2xl border text-left w-full group relative transition-all duration-300",
-                    channel.connected 
-                      ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgba(0,229,255,0.05)]" 
-                      : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                  )}
-                >
-                  <div className={clsx(
-                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-                    channel.connected ? "bg-primary/10 text-primary border border-primary/20" : "bg-on-surface/5 text-on-surface border border-outline-variant"
-                  )}>
-                    <span className="material-symbols-outlined text-[24px]">{channel.icon}</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-[15px] text-on-surface truncate">{channel.name}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      {channel.connected ? (
-                        <>
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-                          <span className="text-[12px] font-medium text-green-400">{channel.statusText || 'Đã kết nối'}</span>
-                        </>
-                      ) : (
-                        <span className="text-[12px] font-medium text-on-surface-variant group-hover:text-on-surface transition-colors">{channel.statusText || 'Kết nối'}</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {channel.connected ? (
-                     <span className="material-symbols-outlined text-green-500 text-[20px] shrink-0">check_circle</span>
-                  ) : (
-                     <span className="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-colors text-[20px] shrink-0">add_circle</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <p className="text-sm font-medium text-on-surface-variant">Dùng để nhắn tin hoặc gọi trực tiếp cho khách sau khi AI đã lấy được số điện thoại.</p>
-          </div>
-        </div>
-      </div>
-      {/* Connected Accounts Header */}
-      <div className="mb-6 mt-12">
-        <h2 className="text-2xl font-bold text-on-surface tracking-tight mb-2">Tài khoản đã kết nối</h2>
-        <p className="text-sm font-medium text-on-surface-variant">Các tài khoản đang hoạt động và những trang thuộc về chúng</p>
-      </div>
-
-      {/* Row 2: Connections Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        
-        {liveConnectedAccounts.map(account => (
-          <div key={account.id} className="bg-surface-container border border-outline-variant rounded-2xl p-6 flex flex-col hover:border-primary/30 transition-colors group relative overflow-hidden">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-6 pb-6 border-b border-outline-variant/50">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-surface-variant rounded-full flex items-center justify-center shrink-0 border border-outline-variant/50 group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined text-on-surface-variant text-[24px]">{account.platformIcon}</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-on-surface mb-0.5">{account.platformName} — {account.accountName}</h3>
-                  {/*
-                    * Nói đúng thứ đang xảy ra.
-                    *
-                    * "Đang quản lý N trang" đếm số KÊNH, mà kênh Facebook thì
-                    * chỉ phục vụ được MỘT Trang tại một thời điểm. Câu cũ làm
-                    * ai cũng tưởng gom thêm Trang được.
-                    */}
-                  <p className="text-sm text-on-surface-variant font-medium">
-                    {account.platformId === 'facebook'
-                      ? <>Đang bán trên <span className="text-on-surface font-bold">{account.accountName}</span> · Kết nối ngày {account.connectionDate}</>
-                      : <>Đang quản lý {account.pages.length} kênh · Kết nối ngày {account.connectionDate}</>}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={clsx("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border", getStatusColor(account.status))}>
-                  <span className={clsx("w-1.5 h-1.5 rounded-full", getStatusDot(account.status))}></span>
-                  {account.status}
-                </span>
-              </div>
-            </div>
-
-            {/* Permissions or Disconnected Warning */}
-            <div className="mb-6">
-              {account.status === 'Mất kết nối' ? (
-                <div className="bg-error/10 border border-error/30 rounded-xl p-4 flex items-start gap-3 mt-2">
-                  <span className="material-symbols-outlined text-error shrink-0">warning</span>
-                  <div>
-                    <p className="text-sm font-bold text-error mb-1">
-                      Kết nối đã hết hạn từ ngày {account.expiryDate}
-                    </p>
-                    <p className="text-xs text-error/90 leading-relaxed font-medium">
-                      AI đã tự tạm dừng trên trang này. Tin nhắn và bình luận của khách vẫn được nhận và lưu lại, nhưng AI không trả lời được cho tới khi bạn kết nối lại.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <h4 className="tieu-de-muc mb-3">QUYỀN ĐÃ CẤP TỪ TÀI KHOẢN NÀY</h4>
-                  <div className="space-y-2">
-                    {account.permissions.map((perm, idx) => {
-                      let missingText = "";
-                      if (!perm.granted) {
-                        if (perm.name.includes("tin nhắn")) missingText = "Thiếu quyền này, AI không tư vấn và chốt đơn qua tin nhắn được.";
-                        else if (perm.name.includes("bình luận") || perm.name.includes("Đọc và trả lời")) missingText = "Thiếu quyền này, AI không trả lời khách được.";
-                        else if (perm.name.includes("Đăng")) missingText = "Thiếu quyền này, AI không đăng bài tự động được.";
-                        else missingText = "Thiếu quyền này, một số tính năng sẽ bị giới hạn.";
-                      }
-
-                      return (
-                        <div key={idx} className="flex flex-col">
-                          <div className="flex items-center gap-3">
-                            {perm.granted ? (
-                              <span className="material-symbols-outlined text-green-400 text-[18px]">check</span>
-                            ) : (
-                              <span className="material-symbols-outlined text-error text-[18px]">close</span>
-                            )}
-                            <span className={clsx("text-sm font-medium", perm.granted ? "text-on-surface" : "text-error")}>
-                              {perm.name}
+                      <ul className="space-y-1.5">
+                        {quyen.map((q) => (
+                          <li key={q.ten} className="text-sm flex items-start gap-2">
+                            <span className={clsx('material-symbols-outlined text-[18px]', q.co ? 'text-on-surface' : 'text-loi')}>{q.co ? 'check' : 'close'}</span>
+                            <span className={q.co ? 'text-on-surface' : 'text-loi'}>
+                              {q.ten}{!q.co && <span className="text-canh-bao"> — thiếu quyền: {q.thieu}</span>}
                             </span>
-                          </div>
-                          {!perm.granted && missingText && (
-                            <p className="text-xs font-bold text-orange-400 mt-1.5 pl-7">
-                              {missingText}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Sub Pages List */}
-            <div className="space-y-4 mb-6">
-              {account.pages.map(page => (
-                <div key={page.id} className="flex items-center justify-between p-4 rounded-xl bg-surface-container border border-outline-variant hover:border-primary/30 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <img src={page.avatar} alt={page.name} className="w-10 h-10 rounded-full object-cover" />
-                    <div>
-                      <div className="text-base font-bold text-on-surface mb-1">{page.name}</div>
-                      <div className="flex items-center gap-3">
-                        <span className={clsx("text-[10px] font-bold uppercase tracking-wider", page.status === 'Đang hoạt động' ? 'text-green-400' : page.status === 'Sắp hết hạn' ? 'text-yellow-400' : 'text-error')}>
-                          {page.status}
-                        </span>
-                        <span className="text-on-surface-variant text-xs font-medium">• {page.messagesProcessed} tin nhắn</span>
-                        <span className="text-on-surface-variant text-xs font-medium">• {page.commentsReplied} bình luận</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {a.platform === 'facebook' && (
+                          <button onClick={() => moDoiTrang(a.id, a.display_name || a.username)} className={clsx(NUT_PHU, 'h-9 px-4 text-sm')}>
+                            <span className="material-symbols-outlined text-[18px]">swap_horiz</span> Đổi sang Trang khác
+                          </button>
+                        )}
+                        {kenh && (
+                          <button onClick={() => handleOpenConnect(kenh)} className={clsx(NUT_PHU, 'h-9 px-4 text-sm')}>
+                            <span className="material-symbols-outlined text-[18px]">sync</span> Nối lại
+                          </button>
+                        )}
+                        <button onClick={() => handleDisconnectPage(a.id)} className="h-9 px-4 rounded-xl border border-loi/60 text-loi text-sm font-bold inline-flex items-center gap-2 hover:bg-loi/10 transition">
+                          <span className="material-symbols-outlined text-[18px]">link_off</span> Ngắt kết nối
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="mt-auto flex gap-3">
-              {account.platformId === 'facebook' ? (
-                <button
-                  onClick={() => moDoiTrang(account.pages[0]?.id ?? '', account.accountName)}
-                  disabled={!account.pages[0]}
-                  className="flex-1 py-2.5 px-4 bg-surface-container border border-outline-variant text-on-surface font-bold rounded-xl hover:bg-surface-variant transition-colors disabled:opacity-50">
-                  Đổi sang Trang khác
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleOpenConnect(allPlatforms.find((c) => c.platformKey === account.platformId) ?? null!)}
-                  className="flex-1 py-2.5 px-4 bg-surface-container border border-outline-variant text-on-surface font-bold rounded-xl hover:bg-surface-variant transition-colors">
-                  Nối lại tài khoản này
-                </button>
-              )}
-              <button onClick={() => handleDisconnectAccount(account.platformId)} className="flex-1 py-2.5 px-4 bg-surface-container border border-error/50 text-error font-bold rounded-xl hover:bg-error/10 hover:border-error transition-colors">
-                Ngắt kết nối cả tài khoản
-              </button>
-            </div>
+              );
+            })}
           </div>
-        ))}
-
-        {/* Add New Page Card */}
-        <button 
-          onClick={() => handleOpenConnect()}
-          className="border-2 border-dashed border-outline-variant hover:border-primary/50 bg-transparent rounded-2xl p-6 flex flex-col items-center justify-center min-h-[300px] group transition-colors"
-        >
-          <div className="w-16 h-16 rounded-full bg-surface-variant group-hover:bg-primary/10 flex items-center justify-center mb-4 transition-colors">
-            <span className="material-symbols-outlined text-[32px] text-on-surface-variant group-hover:text-primary transition-colors">add</span>
-          </div>
-          <h3 className="text-xl font-bold text-on-surface mb-2 group-hover:text-primary transition-colors">Kết nối thêm kênh</h3>
-          {/* Không có hạn mức kết nối theo gói (xem MOI_LUOT_MOT_TRANG) — bản cũ ghi "Gói hiện tại còn 1 lượt kết nối", số bịa. */}
-          <p className="text-sm font-medium text-on-surface-variant">Fanpage, Instagram, TikTok… cho trang bán hàng này</p>
-        </button>
-
-      </div>
+        )}
+      </section>
 
       {/* Connect Modal */}
       {connectStep > 0 && (
@@ -1058,21 +702,21 @@ export default function Connections() {
               {errorBanner}
               <div className="flex gap-2">
                 {connectStep === 1 ? (
-                  <div className="h-1.5 rounded-full bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
+                  <div className="h-1.5 rounded-full bg-primary w-12"></div>
                 ) : selectedPlatform ? (
                   <>
                     {(selectedPlatform.connectionType === 'manual_credentials' || selectedPlatform.connectionType === 'access_code') ? (
-                      <div className="h-1.5 rounded-full bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
+                      <div className="h-1.5 rounded-full bg-primary w-12"></div>
                     ) : selectedPlatform.connectionType === 'oauth_simple' ? (
                       <>
-                        <div className="h-1.5 rounded-full bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
-                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 4 ? "bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]" : "bg-surface-variant w-8")}></div>
+                        <div className="h-1.5 rounded-full bg-primary w-12"></div>
+                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 4 ? "bg-primary w-12" : "bg-surface-variant w-8")}></div>
                       </>
                     ) : (
                       <>
-                        <div className="h-1.5 rounded-full bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]"></div>
-                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 3 ? "bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]" : "bg-surface-variant w-8")}></div>
-                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 4 ? "bg-primary w-12 shadow-[0_0_8px_rgba(0,229,255,0.4)]" : "bg-surface-variant w-8")}></div>
+                        <div className="h-1.5 rounded-full bg-primary w-12"></div>
+                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 3 ? "bg-primary w-12" : "bg-surface-variant w-8")}></div>
+                        <div className={clsx("h-1.5 rounded-full transition-all duration-300", connectStep >= 4 ? "bg-primary w-12" : "bg-surface-variant w-8")}></div>
                       </>
                     )}
                   </>
@@ -1098,7 +742,7 @@ export default function Connections() {
                   </p>
                   <button
                     onClick={handleCheckNow}
-                    className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform"
+                    className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform"
                   >
                     Mở lại danh sách Trang
                   </button>
@@ -1119,7 +763,7 @@ export default function Connections() {
                             className={clsx(
                               "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
                               selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(0,229,255,0.15)]" 
+                                ? "bg-primary/10 border-primary" 
                                 : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
                             )}
                           >
@@ -1139,7 +783,7 @@ export default function Connections() {
                             className={clsx(
                               "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
                               selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(0,229,255,0.15)]" 
+                                ? "bg-primary/10 border-primary" 
                                 : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
                             )}
                           >
@@ -1159,7 +803,7 @@ export default function Connections() {
                             className={clsx(
                               "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
                               selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary shadow-[0_0_15px_rgba(0,229,255,0.15)]" 
+                                ? "bg-primary/10 border-primary" 
                                 : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
                             )}
                           >
@@ -1175,7 +819,7 @@ export default function Connections() {
                     <button 
                       disabled={!selectedPlatform}
                       onClick={() => setConnectStep(2)}
-                      className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
+                      className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
                     >
                       Tiếp tục
                     </button>
@@ -1241,7 +885,7 @@ export default function Connections() {
                     onClick={() => {
                       setConnectStep(0);
                     }}
-                    className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                    className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
                   >
                     Kết nối
                   </button>
@@ -1379,7 +1023,7 @@ export default function Connections() {
                     {!loginSuccess ? (
                       <button 
                         onClick={isLoggingIn ? handleCheckNow : handleStartOAuth}
-                        className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                        className="w-full py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
                       >
                         {isLoggingIn ? (
                           <>
@@ -1412,7 +1056,7 @@ export default function Connections() {
 
                   <div className="space-y-3 mb-6">
                     {newlyConnectedPages.map(page => (
-                      <label key={page.id} className={clsx("flex items-center gap-4 p-4 rounded-xl border transition-colors cursor-pointer", page.connected ? "bg-surface-variant border-outline-variant/60 opacity-70" : selectedPages.includes(page.id) ? "bg-primary/5 border-primary shadow-[0_0_10px_rgba(0,229,255,0.1)]" : "bg-surface-container border-outline-variant hover:border-outline")}>
+                      <label key={page.id} className={clsx("flex items-center gap-4 p-4 rounded-xl border transition-colors cursor-pointer", page.connected ? "bg-surface-variant border-outline-variant/60 opacity-70" : selectedPages.includes(page.id) ? "bg-primary/5 border-primary" : "bg-surface-container border-outline-variant hover:border-outline")}>
                         <div className="flex-1 flex items-center gap-4">
                           <img src={page.avatar} alt={page.name} className="w-12 h-12 rounded-full object-cover border border-outline-variant/50" />
                           <div>
@@ -1487,7 +1131,7 @@ export default function Connections() {
                     <button 
                       disabled={selectedPages.length === 0 || isLoggingIn}
                       onClick={handleConfirmPages}
-                      className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
+                      className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
                     >
                       {isLoggingIn ? 'Đang kết nối Trang…' : 'Tiếp tục'}
                     </button>
@@ -1538,7 +1182,7 @@ export default function Connections() {
                     )}
                     <button 
                       onClick={handleFinishConnection}
-                      className="flex-1 py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl shadow-[0_4px_15px_rgba(0,229,255,0.4)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                      className="flex-1 py-3.5 px-4 bg-primary text-on-primary font-bold text-lg rounded-xl hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
                     >
                       Hoàn tất kết nối
                     </button>

@@ -298,8 +298,7 @@ export default function Dashboard() {
             
             {/* Block 1: AI Insights */}
             {!insightDismissed && (
-            <div className="bg-gradient-to-br from-primary/10 to-surface-container rounded-xl border border-primary/30 p-5 shadow-[0_0_20px_rgba(0,229,255,0.1)] relative overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 rounded-full blur-2xl"></div>
+            <div className="bg-gradient-to-br from-primary/10 to-surface-container rounded-xl border border-primary/30 p-5 relative overflow-hidden">
               
               <div className="flex flex-col mb-4 relative z-10">
                 <div className="flex items-center gap-2 mb-1">
@@ -323,7 +322,7 @@ export default function Dashboard() {
                 <button 
                   onClick={handleApplyRecommendation}
                   disabled={isApplying}
-                  className="flex-1 py-2 bg-primary text-on-primary font-bold text-sm rounded shadow-[0_0_10px_rgba(0,229,255,0.3)] hover:brightness-110 transition-all disabled:opacity-70 flex justify-center items-center gap-2"
+                  className="flex-1 py-2 bg-primary text-on-primary font-bold text-sm rounded hover:brightness-110 transition-all disabled:opacity-70 flex justify-center items-center gap-2"
                 >
                   {isApplying ? (
                     <span className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin"></span>
