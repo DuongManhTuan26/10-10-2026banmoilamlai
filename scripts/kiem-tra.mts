@@ -5851,6 +5851,11 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /cheDo: "de_xuat"/.test(dhn), /ON CONFLICT \(trang_id, report_date, kind\) DO NOTHING RETURNING id/.test(dhn)], [true, true, true, true, true]);
   kiem("vòng lặp", "worker chạy nhịp ngày có hạn giờ",
     /await coHanGio\("điều hành hằng ngày", runDueDieuHanhNgay\(\), 5 \* HAN_MOI_VIEC_MS\)/.test(ma("server/worker.ts")), true);
+  // Chủ dự án 10/10/2026: thẻ theo trình tự làm việc — dạy AI trước, làm, xem kết quả, cuối cùng xem thay đổi.
+  kiem("khối não", "4 thẻ đúng thứ tự Hướng dẫn AI → Đang làm → Kết quả → Nhật ký; thẻ đầu mở mặc định",
+    [[...doc2("src/lib/bon-ai.ts").matchAll(/\{ ma: '([a-z-]+)', ten: '[^']+', bieuTuong:/g)].map((m) => m[1]).join(" "),
+      /\?\.ma \?\? BON_THE\[0\]\.ma\) as MaThe;/.test(doc2("src/components/KhuonAi.tsx"))],
+    ["huong-dan dang-lam ket-qua nhat-ky", true]);
   kiem("khối não", "luật nhường người và hàng rào đọc theo trang",
     [/FROM handoff_rules WHERE trang_id = \$1/.test(ban), /FROM guardrail_configs WHERE trang_id = \$1/.test(ma("server/services/guardrails.ts"))], [true, true]);
 }

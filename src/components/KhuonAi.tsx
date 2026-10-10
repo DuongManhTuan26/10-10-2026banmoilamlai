@@ -7,7 +7,7 @@ import type { MaAi } from '../lib/api';
 
 /**
  * KHUÔN CHUNG của 4 AI trong khối não (docs/khoi-nao.md) — cùng một đầu trang, cùng 4 thẻ theo cùng thứ tự:
- *   Kết quả · Đang làm · Hướng dẫn AI · Nhật ký
+ *   Hướng dẫn AI · Đang làm · Kết quả · Nhật ký (đúng trình tự làm việc — src/lib/bon-ai.ts)
  * Học xong một AI là biết ba AI còn lại. Thẻ đang mở ghi trên địa chỉ (?the=) để tải lại / gửi đường dẫn vẫn đúng chỗ.
  *
  * Dải 4 AI ở đầu trang nhắc rằng đây là MỘT khối liền mạch: AI đang xem sáng màu của nó, ba AI kia mờ, bấm để sang.
@@ -26,7 +26,7 @@ export default function KhuonAi({
   const motAi = aiTheoMa(ai);
   const { nao } = useKhoiNao();
   const [tim, datTim] = useSearchParams();
-  const theMo = (BON_THE.find((t) => t.ma === tim.get('the'))?.ma ?? 'ket-qua') as MaThe;
+  const theMo = (BON_THE.find((t) => t.ma === tim.get('the'))?.ma ?? BON_THE[0].ma) as MaThe;
 
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full">

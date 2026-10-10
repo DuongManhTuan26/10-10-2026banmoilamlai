@@ -44,7 +44,7 @@ Chủ chuỗi ─┬─ Trang 1 ── Khối não 1
   ④ AI Điều hành (gồm thống kê, sức khoẻ, báo cáo chuỗi, đề xuất).
 - Dữ liệu của trang: Mục tiêu & sản phẩm · Tài liệu · Kết nối kênh · Telegram.
 - Quản lý (chủ chuỗi / quản trị): danh sách khối não, chi phí, gói dịch vụ.
-- 4 màn hình AI dùng chung một khuôn 4 thẻ: **Kết quả · Đang làm · Hướng dẫn AI · Nhật ký**.
+- 4 màn hình AI dùng chung một khuôn 4 thẻ: **Hướng dẫn AI · Đang làm · Kết quả · Nhật ký**.
 
 ## 4. Quyền mở khối não
 

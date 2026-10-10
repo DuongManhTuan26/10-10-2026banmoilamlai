@@ -1,7 +1,7 @@
 /**
  * MÀN HÌNH KHỐI NÃO (chủ dự án chốt 10/10/2026 — docs/khoi-nao.md).
  *
- * Tổng quan khối não + 4 AI cố định, mỗi AI cùng một khuôn 4 thẻ (KhuonAi): Kết quả · Đang làm · Hướng dẫn AI · Nhật ký.
+ * Tổng quan khối não + 4 AI cố định, mỗi AI cùng một khuôn 4 thẻ (KhuonAi): Hướng dẫn AI · Đang làm · Kết quả · Nhật ký.
  * Thẻ "Đang làm" ghép đúng màn hình làm việc sẵn có của AI đó (không viết bản thứ hai):
  *   ① Nội dung — bài đăng, Xưởng AI, lịch tự đăng      ② Quảng cáo — tài khoản, chiến dịch, đẩy bài
  *   ③ Bán hàng — Hộp thư · Đơn hàng                    ④ Điều hành — chẩn đoán, đề xuất chờ duyệt

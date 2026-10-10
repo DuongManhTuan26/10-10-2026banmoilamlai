@@ -34,11 +34,18 @@ export const BON_AI: readonly MotAi[] = [
 
 export const aiTheoMa = (ma: MaAi): MotAi => BON_AI.find((a) => a.ma === ma)!;
 
-/** Khuôn 4 thẻ dùng chung cho cả 4 AI — cùng tên, cùng thứ tự. */
+/**
+ * Khuôn 4 thẻ dùng chung cho cả 4 AI — cùng tên, cùng thứ tự, THEO ĐÚNG TRÌNH TỰ LÀM VIỆC (chủ dự án 10/10/2026):
+ *   1. Hướng dẫn AI — AI phải biết vai trò, nhiệm vụ, cách làm TRƯỚC
+ *   2. Đang làm     — rồi mới làm việc
+ *   3. Kết quả      — rồi xem kết quả tạo ra
+ *   4. Nhật ký      — cuối cùng xem lại sự thay đổi
+ * Thẻ đầu tiên là thẻ mở mặc định.
+ */
 export const BON_THE = [
-  { ma: 'ket-qua', ten: 'Kết quả', bieuTuong: 'insights' },
-  { ma: 'dang-lam', ten: 'Đang làm', bieuTuong: 'play_circle' },
   { ma: 'huong-dan', ten: 'Hướng dẫn AI', bieuTuong: 'school' },
+  { ma: 'dang-lam', ten: 'Đang làm', bieuTuong: 'play_circle' },
+  { ma: 'ket-qua', ten: 'Kết quả', bieuTuong: 'insights' },
   { ma: 'nhat-ky', ten: 'Nhật ký', bieuTuong: 'history' },
 ] as const;
 export type MaThe = (typeof BON_THE)[number]['ma'];
