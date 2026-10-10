@@ -138,3 +138,14 @@ Mỗi mục: hiện tượng · căn cứ để gọi là lỗi · nguyên nhân
   sang `tong-quan.ts`).
 - **Đã làm:** khôi phục phép kiểm công thức (đúng cách sao kê). KHÔNG xoá cột.
 - **Cần quyết:** giữ (để dùng sau) hay bỏ cột thừa.
+
+## TD-12 — Khối não (10/10/2026): việc còn lại sau đợt thiết kế lại
+
+- **Bước 5 — AI quảng cáo tự tối ưu ngân sách: CHƯA LÀM.** Đụng tiền thật; bản thử dùng khoá giả nên chưa đọc được
+  cấu trúc API quảng cáo thật (liên kết quảng cáo → chiến dịch, số chi theo chiến dịch). Hướng đã định: chế độ đề xuất
+  mặc định; tự động chỉ khi chủ dự án bật, trong trần ngân sách, mỗi lần đổi tối đa ±20%, không tạo chiến dịch mới.
+- **CHỜ CHỦ DỰ ÁN:** cách siết phép đối chiếu giá (một con số bất kỳ trong tài liệu đều được nhận); hiệu chỉnh khi kiểm
+  nhiều chỉ số cùng lúc ở bảng sức khoẻ.
+- **Chưa đưa vào khối não:** báo cáo chuỗi 4 khâu (BaoCaoChuoi) vẫn chỉ ở màn Quản lý — cần dữ liệu tiền của một trang.
+- **Chưa chạy trên dữ liệu thật:** mọi kiểm thử chạy trên cơ sở dữ liệu thử; migration 047–050 cần sao lưu trước khi áp
+  lên cơ sở dữ liệu thật.
