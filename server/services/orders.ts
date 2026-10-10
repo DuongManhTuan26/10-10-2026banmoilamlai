@@ -11,6 +11,13 @@ import { queryOne, transaction } from "../db.js";
 import { AppError } from "../http.js";
 import { sendOrderReport } from "./telegram.js";
 
+/** Một dòng hàng của đơn. */
+export interface DongHang {
+  ten: string;
+  soLuong: number;
+  donGia: number;
+}
+
 export interface DuLieuDon {
   userId: number;
   conversationId: string | null;
@@ -24,6 +31,11 @@ export interface DuLieuDon {
   /** 'ai' khi AI tự chốt, 'human' khi người bấm tạo. */
   closedBy: "ai" | "human";
   status?: string;
+  /**
+   * Đơn NHIỀU sản phẩm (migration 049). Có thì product / quantity / unitPrice bị bỏ qua: product = tên các dòng gộp lại,
+   * quantity = tổng số lượng, total = tổng tiền các dòng, unit_price = đơn giá khi chỉ có một dòng (nhiều dòng → 0).
+   */
+  items?: DongHang[];
   /**
    * Trang của đơn khi KHÔNG có hội thoại (tạo tay). Có hội thoại thì luôn lấy trang của kênh hội thoại — giá trị này
    * bị bỏ qua. Phải thuộc đúng tài khoản (kiểm trong câu ghi).
@@ -71,7 +83,21 @@ export function gopVaoTongChi(
   return { don: 1, tien: Number.isFinite(tong) ? tong : 0 };
 }
 
-export async function taoDon(d: DuLieuDon): Promise<Record<string, unknown>> {
+export async function taoDon(dVao: DuLieuDon): Promise<Record<string, unknown>> {
+  let d = dVao;
+  if (d.items?.length) {
+    for (const x of d.items) {
+      if (!x.ten.trim()) throw new AppError("Mỗi dòng hàng phải có tên sản phẩm");
+      if (!Number.isFinite(x.soLuong) || x.soLuong < 1) throw new AppError("Số lượng phải là số nguyên từ 1 trở lên");
+      if (!Number.isFinite(x.donGia) || x.donGia < 0) throw new AppError("Đơn giá không hợp lệ");
+    }
+    d = {
+      ...d,
+      product: d.items.map((x) => (x.soLuong > 1 ? `${x.ten.trim()} x${x.soLuong}` : x.ten.trim())).join("; "),
+      quantity: d.items.reduce((s, x) => s + x.soLuong, 0),
+      unitPrice: d.items.length === 1 ? d.items[0].donGia : 0,
+    };
+  }
   if (!d.product.trim()) throw new AppError("Đơn phải có tên sản phẩm");
   if (!Number.isFinite(d.quantity) || d.quantity < 1) {
     throw new AppError("Số lượng phải là số nguyên từ 1 trở lên");
@@ -90,7 +116,9 @@ export async function taoDon(d: DuLieuDon): Promise<Record<string, unknown>> {
     customerId = conversation.customer_id;
   }
 
-  const total = d.quantity * d.unitPrice;
+  const total = d.items?.length
+    ? d.items.reduce((s, x) => s + x.soLuong * x.donGia, 0)
+    : d.quantity * d.unitPrice;
 
   /*
    * Thử lại khi đụng mã đơn.
@@ -190,9 +218,9 @@ async function ghiDon(
       `INSERT INTO orders
          (user_id, customer_id, conversation_id, code, customer_name, phone,
           address, product, quantity, unit_price, total, status, closed_by, note,
-          social_account_id, trang_id, origin, origin_ad_id, origin_post_id)
+          social_account_id, trang_id, origin, origin_ad_id, origin_post_id, items)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-               (SELECT id FROM trang WHERE id = $16 AND user_id = $1), $17, $18, $19)
+               (SELECT id FROM trang WHERE id = $16 AND user_id = $1), $17, $18, $19, $20::jsonb)
        RETURNING *`,
       [
         d.userId, customerId, d.conversationId, code,
@@ -200,6 +228,7 @@ async function ghiDon(
         d.product, d.quantity, d.unitPrice, total,
         d.status && TRANG_THAI.has(d.status) ? d.status : "pending",
         d.closedBy, d.note, kenhId, trangId, nguon.loai, nguon.ad, nguon.bai,
+        d.items?.length ? JSON.stringify(d.items.map((x) => ({ ten: x.ten.trim(), so_luong: x.soLuong, don_gia: x.donGia }))) : null,
       ]
     );
 
@@ -240,18 +269,20 @@ async function ghiDon(
 }
 
 /**
- * Hội thoại này đã có đơn chưa.
+ * Đơn gần nhất (chưa huỷ) của một hội thoại — để AI bán hàng biết khách đang đặt THÊM hay chỉ hỏi về đơn đã chốt.
  *
- * Chốt chặn quan trọng nhất của việc để AI tự lên đơn: khách nhắn thêm vài câu
- * sau khi đã chốt thì AI vẫn thấy "đủ thông tin, khách đồng ý mua" và sẽ lên
- * đơn lần nữa. Một đơn hai lần là mất tiền thật của chủ shop.
+ * Bản trước chỉ hỏi "hội thoại đã có đơn chưa" rồi chặn MÃI MÃI: Messenger giữ một hội thoại cho mỗi khách, nên khách
+ * quay lại mua lần hai thì AI nói đã chốt nhưng không lên đơn, không báo ai — khách chờ hàng, shop không biết có đơn.
  */
-export async function daCoDon(conversationId: string): Promise<boolean> {
-  const row = await queryOne(
-    `SELECT id FROM orders
+export async function donGanNhat(conversationId: string): Promise<{
+  id: number; code: string; product: string; status: string; soNgay: number; items: unknown;
+} | null> {
+  return queryOne(
+    `SELECT id::int AS id, code, product, status, items,
+            floor(extract(epoch FROM now() - created_at) / 86400)::int AS "soNgay"
+       FROM orders
       WHERE conversation_id = $1 AND status <> 'cancelled'
-      LIMIT 1`,
+      ORDER BY created_at DESC LIMIT 1`,
     [conversationId]
   );
-  return !!row;
 }

@@ -19,7 +19,7 @@ import Orders from './Orders';
 import AutoScripts from './AutoScripts';
 import Analytics from './Analytics';
 import { useKhoiNao } from '../lib/ActivePage';
-import { BON_AI } from '../lib/bon-ai';
+import { BON_AI, aiTheoMa } from '../lib/bon-ai';
 import { api, type ChiSoSucKhoe, type SucKhoeTrang } from '../lib/api';
 
 export function NoiDungAi() {
@@ -66,7 +66,9 @@ function BanHangDangLam() {
             key={v.ma}
             onClick={() => chon(v.ma)}
             className={clsx('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition',
-              viec === v.ma ? 'bg-[#34d399]/15 text-[#34d399]' : 'text-on-surface-variant hover:text-on-surface')}
+              viec !== v.ma && 'text-on-surface-variant hover:text-on-surface')}
+            // Màu của AI bán hàng (src/lib/bon-ai.ts) — không ghi cứng màu nền ngoài bảng màu.
+            style={viec === v.ma ? { color: aiTheoMa('sales').hex, background: `${aiTheoMa('sales').hex}26` } : undefined}
           >
             <span className="material-symbols-outlined text-[18px]">{v.icon}</span>
             {v.ten}
@@ -207,7 +209,7 @@ export function TongQuanKhoiNao() {
           <div key={a.ma} className="contents">
             {o(a)}
             {i < nhanVien.length - 1 && (
-              <div className="hidden lg:flex items-center justify-center text-on-surface-variant/60">
+              <div className="hidden lg:flex items-center justify-center text-on-surface-variant">
                 <span className="material-symbols-outlined">arrow_forward</span>
               </div>
             )}

@@ -132,8 +132,15 @@ export async function sendOrderReport(
     `<b>Điện thoại:</b> ${escapeHtml(order.phone ?? "Chưa có")}`,
     `<b>Địa chỉ:</b> ${escapeHtml(order.address ?? "Chưa có")}`,
     "",
-    `<b>Sản phẩm:</b> ${escapeHtml(order.product)}`,
-    `<b>Số lượng:</b> ${escapeHtml(order.quantity)}`,
+    // Đơn nhiều sản phẩm (migration 049): từng dòng hàng một dòng, có đơn giá — chủ shop soạn hàng đúng.
+    ...(Array.isArray(order.items) && order.items.length > 1
+      ? [
+          "<b>Sản phẩm:</b>",
+          ...(order.items as { ten: string; so_luong: number; don_gia: number }[]).map(
+            (x) => `• ${escapeHtml(x.ten)} × ${x.so_luong} — ${x.don_gia > 0 ? `${CURRENCY.format(x.don_gia)} đ` : "chưa có giá"}`
+          ),
+        ]
+      : [`<b>Sản phẩm:</b> ${escapeHtml(order.product)}`, `<b>Số lượng:</b> ${escapeHtml(order.quantity)}`]),
     `<b>Tổng tiền:</b> ${CURRENCY.format(Number(order.total ?? 0))} đ`,
     "",
     order.closed_by === "ai" ? "🤖 Do AI chốt" : "👤 Do nhân viên chốt",

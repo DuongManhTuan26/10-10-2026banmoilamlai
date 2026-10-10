@@ -45,10 +45,10 @@ export default function KhuonAi({
               <span className="font-mono">{a.so}</span>
               <span className="hidden sm:inline">{a.ten.replace('AI ', '')}</span>
             </Link>
-            {i < BON_AI.length - 1 && <span className="material-symbols-outlined text-[16px] text-on-surface-variant/50">arrow_forward</span>}
+            {i < BON_AI.length - 1 && <span className="material-symbols-outlined text-[16px] text-on-surface-variant">arrow_forward</span>}
           </div>
         ))}
-        <span className="material-symbols-outlined text-[16px] text-on-surface-variant/50 shrink-0" title="AI điều hành quay lại chỉ đạo 3 AI">replay</span>
+        <span className="material-symbols-outlined text-[16px] text-on-surface-variant shrink-0" title="AI điều hành quay lại chỉ đạo 3 AI">replay</span>
       </div>
 
       {/* Đầu trang: số + tên + chức năng cố định + trang đang làm việc. */}

@@ -5,7 +5,7 @@ import { docTuChu, moTaTuChu, type TuChuConfig } from "./sales-autonomy.js";
 import { boMarkdown, DAN_KHONG_MARKDOWN } from "./text.js";
 import * as zernio from "./zernio.js";
 import { sendHandoffAlert } from "./telegram.js";
-import { taoDon, daCoDon } from "./orders.js";
+import { taoDon, donGanNhat, type DongHang } from "./orders.js";
 import { sendMessageSafely } from "./outbound.js";
 import { xinSuatTraLoiAI } from "./chong-lam-dung.js";
 import { chayChoKenh } from "./ngu-canh-trang.js";
@@ -24,6 +24,15 @@ import { chayChoKenh } from "./ngu-canh-trang.js";
 /** Số lượt hội thoại tối đa AI tự xử lý trước khi bắt buộc chuyển người. */
 const DEFAULT_MAX_TURNS = 8;
 
+/** Đầu lý do nhường người khi khách đòi gặp người thật — dùng để không tự hồi sinh hội thoại đó ở chế độ tự chủ. */
+const LY_DO_DOI_NGUOI = "Khách yêu cầu gặp người thật";
+
+/**
+ * Khách mua THÊM trong cùng hội thoại (Messenger giữ một hội thoại mãi mãi): đơn trước chưa giao xong và tạo trong
+ * chừng này ngày thì KHÔNG tự lên đơn mới — báo chủ shop để gộp / tách cho đúng. Ngoài khoảng đó là một lần mua mới.
+ */
+export const NGAY_DON_CON_MO = 3;
+
 /** Số tin nhắn gần nhất đưa vào ngữ cảnh cho AI. */
 const CONTEXT_MESSAGE_LIMIT = 20;
 
@@ -40,6 +49,7 @@ interface ConversationRow {
   customer_id: number | null;
   platform: string;
   status: string;
+  handoff_reason?: string | null;
   ai_enabled: boolean;
   handoff_at: Date | null;
   holding_sent_at: Date | null;
@@ -71,7 +81,14 @@ export interface SalesDecision {
     quantity: string | null;
     /** Đơn giá lấy từ tài liệu, để AI tự lên đơn có số tiền đúng. */
     unitPrice: string | null;
+    /** Các dòng hàng khi khách mua NHIỀU sản phẩm (đơn giá mỗi dòng lấy từ tài liệu). Rỗng = dùng product/quantity/unitPrice. */
+    items: { product: string; quantity: string | null; unitPrice: string | null }[];
   };
+  /**
+   * Khách đòi gặp NGƯỜI THẬT (hoặc khiếu nại gay gắt). Chuyển người ở MỌI chế độ, kể cả tự chủ — chủ dự án duyệt
+   * 10/10/2026: khách đang bực mà vẫn gặp máy là mất khách và dễ bị báo cáo trang.
+   */
+  canNguoiThat: boolean;
   /** Việc vượt chính sách, cần báo chủ shop — nhưng KHÔNG dừng hội thoại. */
   needsOwner: boolean;
   /** Bước bán hàng AI xác định cho lượt này; rỗng nếu không nhận ra. */
@@ -88,7 +105,7 @@ export async function handleIncomingMessage(conversationId: string): Promise<boo
   const conversation = await queryOne<ConversationRow>(
     `SELECT c.id, c.user_id, c.social_account_id, c.customer_id, c.platform, c.status,
             c.ai_enabled, c.window_expires_at, c.last_customer_message_at,
-            c.handoff_at, c.holding_sent_at, c.sales_stage,
+            c.handoff_at, c.holding_sent_at, c.sales_stage, c.handoff_reason,
             c.trang_id
        FROM conversations c
       WHERE c.id = $1`,
@@ -130,6 +147,14 @@ export async function handleIncomingMessage(conversationId: string): Promise<boo
   const tuChuSom = docTuChu(cauHinhSom?.settings?.tuChu);
 
   if (conversation.status === "waiting_human" || !conversation.ai_enabled) {
+    /*
+     * Khách ĐÃ đòi gặp người thật → không hồi sinh kể cả khi tự chủ đang bật: khách đã nói rõ không muốn nói chuyện với
+     * máy. Chỉ gửi đúng một câu giữ chỗ rồi chờ người.
+     */
+    if (conversation.status === "waiting_human" && conversation.handoff_reason?.startsWith(LY_DO_DOI_NGUOI)) {
+      await sendHoldingMessageOnce(conversation);
+      return false;
+    }
     if (!tuChuSom.bat) {
       if (conversation.status === "waiting_human") {
         await sendHoldingMessageOnce(conversation);
@@ -269,6 +294,12 @@ export async function handleIncomingMessage(conversationId: string): Promise<boo
   }
 
   const decision = await decide(conversation, history, rules);
+
+  if (decision.canNguoiThat) {
+    await saveExtracted(conversation, decision.extracted);
+    await handoff(conversation, `${LY_DO_DOI_NGUOI}${decision.handoffReason ? ` — ${decision.handoffReason}` : ""}`);
+    return false;
+  }
 
   // Lưu thông tin AI bóc tách được vào hồ sơ khách, kể cả khi phải nhường quyền:
   // nhân viên vào tiếp quản đã có sẵn dữ liệu, không phải hỏi lại khách.
@@ -487,99 +518,110 @@ export async function giaCoTrongTaiLieu(
 /**
  * AI tự tạo đơn.
  *
- * Ba chốt chặn, theo thứ tự quan trọng:
+ * Bốn chốt chặn, theo thứ tự quan trọng:
  *
- *  1. MỘT HỘI THOẠI MỘT ĐƠN. Khách nhắn thêm sau khi chốt thì AI vẫn thấy "đủ
- *     thông tin, khách đồng ý mua" và sẽ lên đơn lần nữa. Một đơn hai lần là
- *     mất hàng thật, mất tiền thật của chủ shop.
- *  2. THIẾU THÔNG TIN THÌ KHÔNG LÊN. Thiếu tên, số điện thoại hay địa chỉ thì
- *     đơn đó không giao được — thà báo chủ shop còn hơn đẻ ra một đơn rác.
- *  3. LỖI KHÔNG ĐƯỢC LÀM HỎNG HỘI THOẠI. Tạo đơn hỏng thì báo chủ shop, còn
- *     câu trả lời cho khách đã gửi đi rồi vẫn giữ nguyên.
+ *  1. KHÔNG LÊN TRÙNG, KHÔNG BỎ SÓT LẦN MUA MỚI. Khách nhắn thêm sau khi chốt thì AI vẫn có thể thấy "khách đồng ý mua"
+ *     — một đơn hai lần là mất hàng thật. Nhưng Messenger giữ một hội thoại mãi mãi, nên khách quay lại mua lần hai cũng
+ *     nằm trong hội thoại đó; bản trước chặn MÃI MÃI và chỉ ghi nhật ký — khách tưởng đã đặt, shop không biết có đơn.
+ *     Nay: đơn trước chưa giao xong và mới tạo trong NGAY_DON_CON_MO ngày → cùng hàng thì bỏ qua (đơn đó), khác hàng thì
+ *     BÁO CHỦ SHOP để gộp / tách; ngoài khoảng đó là một lần mua mới → lên đơn mới.
+ *  2. THIẾU THÔNG TIN THÌ KHÔNG LÊN — nhưng lấy cả từ hồ sơ khách (khách cho số điện thoại từ lâu, ngoài 20 tin AI đọc).
+ *  3. ĐƠN GIÁ TỪNG DÒNG PHẢI CÓ TRONG TÀI LIỆU SHOP (giaCoTrongTaiLieu) — không có thì để 0 và báo chủ shop điền.
+ *  4. LỖI KHÔNG ĐƯỢC LÀM HỎNG HỘI THOẠI — tạo đơn hỏng thì báo chủ shop, câu trả lời đã gửi vẫn giữ.
  */
 async function tuLenDon(
   conversation: ConversationRow,
   decision: SalesDecision,
   tuChu: TuChuConfig
 ): Promise<void> {
-  if (await daCoDon(conversation.id)) {
-    console.log(`[AI bán hàng] Hội thoại ${conversation.id} đã có đơn, không lên lần nữa.`);
-    return;
-  }
-
   const e = decision.extracted;
-  const thieu = [
-    !e.name?.trim() && "họ tên",
-    !e.phone?.trim() && "số điện thoại",
-    !e.address?.trim() && "địa chỉ",
-    !e.product?.trim() && "sản phẩm",
-  ].filter((x): x is string => typeof x === "string");
+  const dongAi = e.items.length
+    ? e.items
+    : e.product?.trim()
+      ? [{ product: e.product, quantity: e.quantity, unitPrice: e.unitPrice }]
+      : [];
 
-  if (thieu.length > 0) {
+  // 1. Đơn trước còn mở?
+  const donCu = await donGanNhat(conversation.id);
+  if (donCu && donCu.soNgay < NGAY_DON_CON_MO && ["pending", "confirmed"].includes(donCu.status)) {
+    const tenMoi = dongAi.map((d) => d.product.trim().toLowerCase()).sort().join("|");
+    const tenCu = donCu.product.toLowerCase();
+    if (!tenMoi || dongAi.every((d) => tenCu.includes(d.product.trim().toLowerCase()))) {
+      console.log(`[AI bán hàng] Hội thoại ${conversation.id}: khách nói về đơn ${donCu.code} đang mở — không lên đơn mới.`);
+      return;
+    }
     await baoChuShop(
       conversation,
-      `Khách đã đồng ý mua nhưng còn thiếu ${thieu.join(", ")} — chưa lên đơn được`,
+      `Khách muốn đặt THÊM (${dongAi.map((d) => d.product).join(", ")}) trong khi đơn ${donCu.code} chưa giao — ` +
+        `vào gộp vào đơn cũ hoặc tạo đơn mới`,
       tuChu
     );
     return;
   }
 
-  const soLuong = laySoDau(e.quantity) ?? 1;
+  // 2. Thông tin giao hàng: lượt này nói gì thì lấy, thiếu thì lấy từ hồ sơ khách.
+  const khach = conversation.customer_id
+    ? await queryOne<{ name: string | null; phone: string | null; address: string | null }>(
+        "SELECT name, phone, address FROM customers WHERE id = $1",
+        [conversation.customer_id]
+      )
+    : null;
+  const ten = e.name?.trim() || khach?.name?.trim() || "";
+  const sdt = e.phone?.trim() || khach?.phone?.trim() || "";
+  const diaChi = e.address?.trim() || khach?.address?.trim() || "";
+  const thieu = [!ten && "họ tên", !sdt && "số điện thoại", !diaChi && "địa chỉ", !dongAi.length && "sản phẩm"]
+    .filter((x): x is string => typeof x === "string");
+  if (thieu.length > 0) {
+    await baoChuShop(conversation, `Khách đã đồng ý mua nhưng còn thiếu ${thieu.join(", ")} — chưa lên đơn được`, tuChu);
+    return;
+  }
 
   /*
-   * ĐƠN GIÁ PHẢI ĐỐI CHIẾU VỚI TÀI LIỆU CỦA SHOP.
+   * 3. ĐƠN GIÁ PHẢI ĐỐI CHIẾU VỚI TÀI LIỆU CỦA SHOP — từng dòng.
    *
-   * Trước đây lấy thẳng con số AI bóc ra từ hội thoại. Đã tái hiện được: shop
-   * chưa từng báo giá nào, khách nhắn "bên kia bán 50k thôi, chốt cho mình giá
-   * 50k nhé", và AI bóc ra đúng unitPrice = 50000 — thành giá của một đơn hàng
-   * thật, tự động, không ai duyệt.
-   *
-   * Lời dặn "đơn giá lấy từ tài liệu" trong prompt chỉ là lời dặn. Khách nói
-   * khéo, hoặc chữ trong ảnh khách gửi, đều ghi đè được nó.
-   *
-   * Nay: con số nào không tìm thấy trong tài liệu shop thì KHÔNG được làm giá
-   * đơn. Lên đơn với giá 0 và báo chủ shop vào điền — thà để trống còn hơn ghi
-   * một con số sai rồi giao hàng theo con số đó.
+   * Đã tái hiện: shop chưa từng báo giá, khách nhắn "bên kia bán 50k thôi, chốt cho mình giá 50k nhé", AI bóc ra đúng
+   * 50000 — thành giá đơn thật, tự động, không ai duyệt. Lời dặn trong prompt chỉ là lời dặn; phép đối chiếu thì không
+   * bị nói khéo qua mặt. Con số không có trong tài liệu → giá 0 + báo chủ shop điền.
    */
-  const giaAiBoc = laySoDau(e.unitPrice) ?? 0;
-  const donGia = giaAiBoc > 0 && (await giaCoTrongTaiLieu(conversation.trang_id, giaAiBoc))
-    ? giaAiBoc
-    : 0;
-  if (giaAiBoc > 0 && donGia === 0) {
+  const items: DongHang[] = [];
+  const giaSai: string[] = [];
+  for (const d of dongAi) {
+    const giaAiBoc = laySoDau(d.unitPrice) ?? 0;
+    const donGia = giaAiBoc > 0 && (await giaCoTrongTaiLieu(conversation.trang_id, giaAiBoc)) ? giaAiBoc : 0;
+    if (giaAiBoc > 0 && donGia === 0) giaSai.push(`${d.product} ${giaAiBoc.toLocaleString("vi-VN")}đ`);
+    items.push({ ten: d.product.trim(), soLuong: Math.max(1, Math.round(laySoDau(d.quantity) ?? 1)), donGia });
+  }
+  if (giaSai.length) {
     await baoChuShop(
       conversation,
-      `AI bóc ra đơn giá ${giaAiBoc.toLocaleString("vi-VN")}đ nhưng con số này không có ` +
-        `trong tài liệu của shop, nên không dùng làm giá đơn. Vào kiểm tra và điền giá đúng.`,
+      `AI bóc ra đơn giá ${giaSai.join(", ")} nhưng con số này không có trong tài liệu của shop, nên không dùng làm giá ` +
+        `đơn. Vào kiểm tra và điền giá đúng.`,
       tuChu
     );
   }
+  const thieuGia = items.some((x) => x.donGia === 0);
 
   try {
     const don = await taoDon({
       userId: conversation.user_id,
       conversationId: conversation.id,
-      customerName: e.name!.trim(),
-      phone: e.phone!.trim(),
-      address: e.address!.trim(),
-      product: e.product!.trim(),
-      quantity: soLuong,
-      unitPrice: donGia,
-      note:
-        donGia === 0
-          ? giaAiBoc > 0
-            ? `AI tự lên đơn — khách nhắc tới giá ${giaAiBoc.toLocaleString("vi-VN")}đ ` +
-              `nhưng con số đó KHÔNG có trong tài liệu shop, chủ shop điền giá đúng.`
-            : "AI tự lên đơn — chưa xác định được đơn giá, chủ shop kiểm tra lại."
-          : "AI tự lên đơn.",
+      customerName: ten,
+      phone: sdt,
+      address: diaChi,
+      product: items[0].ten,
+      quantity: items[0].soLuong,
+      unitPrice: items[0].donGia,
+      items,
+      note: thieuGia
+        ? giaSai.length
+          ? `AI tự lên đơn — khách nhắc tới giá (${giaSai.join(", ")}) nhưng KHÔNG có trong tài liệu shop, chủ shop điền giá đúng.`
+          : "AI tự lên đơn — chưa xác định được đơn giá, chủ shop kiểm tra lại."
+        : "AI tự lên đơn.",
       closedBy: "ai",
     });
     console.log(`[AI bán hàng] Đã tự lên đơn ${don.code} cho hội thoại ${conversation.id}.`);
   } catch (error) {
-    await baoChuShop(
-      conversation,
-      `Không tự lên đơn được: ${error instanceof Error ? error.message : String(error)}`,
-      tuChu
-    );
+    await baoChuShop(conversation, `Không tự lên đơn được: ${error instanceof Error ? error.message : String(error)}`, tuChu);
   }
 }
 
@@ -732,6 +774,32 @@ async function decide(
 
   const cacBuoc = docCacBuoc((config?.settings as { stages?: unknown } | undefined)?.stages);
   const buocTruoc = conversation.sales_stage;
+
+  /*
+   * Hồ sơ khách ĐÃ BIẾT + đơn gần nhất trong hội thoại.
+   *
+   * AI chỉ đọc 20 tin gần nhất; số điện thoại / địa chỉ khách cho từ trước đó đã nằm trong hồ sơ khách nhưng AI không
+   * thấy → hỏi lại khách, hoặc báo "thiếu thông tin" dù shop đã có. Đơn gần nhất để AI biết khách đang đặt THÊM hay chỉ
+   * hỏi tiếp về đơn đã chốt — không hứa lên đơn mới khi đơn cũ còn chưa giao.
+   */
+  const khach = conversation.customer_id
+    ? await queryOne<{ name: string | null; phone: string | null; address: string | null; total_orders: number }>(
+        "SELECT name, phone, address, total_orders FROM customers WHERE id = $1",
+        [conversation.customer_id]
+      )
+    : null;
+  const donCu = await donGanNhat(conversation.id);
+  const boiCanhKhach = [
+    "THÔNG TIN KHÁCH ĐÃ BIẾT (từ các lần trước — dùng lại, KHÔNG hỏi lại thứ đã có):",
+    `- Họ tên: ${khach?.name || "chưa có"}`,
+    `- Số điện thoại: ${khach?.phone || "chưa có"}`,
+    `- Địa chỉ: ${khach?.address || "chưa có"}`,
+    `- Số đơn đã mua: ${khach?.total_orders ?? 0}`,
+    donCu
+      ? `- Đơn gần nhất trong hội thoại này: ${donCu.code} · ${donCu.product} · trạng thái ${donCu.status} · tạo ${donCu.soNgay} ngày trước.` +
+        " readyToOrder CHỈ true khi khách đồng ý mua THÊM một đơn MỚI khác đơn này; hỏi về đơn này thì không."
+      : "- Chưa có đơn nào trong hội thoại này.",
+  ].join("\n");
   const tuChu = docTuChu((config?.settings as { tuChu?: unknown } | undefined)?.tuChu);
 
 /**
@@ -810,6 +878,8 @@ const CHUA_CO_TAI_LIEU = [
     "",
     LUAT_NOI_DUNG_ANH,
     "",
+    boiCanhKhach,
+    "",
     tuChu.bat
       ? moTaTuChu(tuChu)
       : [
@@ -860,7 +930,10 @@ const CHUA_CO_TAI_LIEU = [
     '  "handoffReason": string,// lý do ngắn gọn bằng tiếng Việt khi canAnswer=false',
     '  "extracted": { "name": string|null, "phone": string|null, "address": string|null,',
     '                 "product": string|null, "quantity": string|null,',
-    '                 "unitPrice": string|null },  // đơn giá lấy từ tài liệu, chỉ số',
+    '                 "unitPrice": string|null,    // đơn giá lấy từ tài liệu, chỉ số',
+    '                 "items": [{ "product": string, "quantity": string|null, "unitPrice": string|null }] },',
+    '                 // items: CHỈ khi khách mua từ 2 sản phẩm khác nhau — mỗi sản phẩm một dòng, đơn giá từ tài liệu',
+    '  "canNguoiThat": boolean, // true khi khách yêu cầu gặp người thật / nhân viên, hoặc khiếu nại gay gắt',
     tuChu.bat
       ? '  "needsOwner": boolean,  // true khi cần báo chủ shop; VẪN phải có reply'
       : '  "needsOwner": false,',
@@ -906,7 +979,15 @@ const CHUA_CO_TAI_LIEU = [
           product: optionalString(extracted.product),
           quantity: optionalString(extracted.quantity),
           unitPrice: optionalString(extracted.unitPrice),
+          items: Array.isArray(extracted.items)
+            ? extracted.items
+                .map((x) => asRecord(x))
+                .map((x) => ({ product: optionalString(x.product) ?? "", quantity: optionalString(x.quantity), unitPrice: optionalString(x.unitPrice) }))
+                .filter((x) => x.product.trim() !== "")
+                .slice(0, 20)
+            : [],
         },
+        canNguoiThat: object.canNguoiThat === true,
         needsOwner: object.needsOwner === true,
         stage:
           typeof object.stage === "string" && maCacBuoc(cacBuoc).includes(object.stage)

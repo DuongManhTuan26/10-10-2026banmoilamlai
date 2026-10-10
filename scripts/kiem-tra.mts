@@ -304,10 +304,13 @@ kiem("cấu trúc", "MỌI chỗ trả lời công khai đều xin phép trướ
  * 27 dòng, đo bằng khoảng cách thì báo sót oan.
  */
 const viTriTaoDon = nguonSales.indexOf("const don = await taoDon({");
-const viTriChongTrung = nguonSales.lastIndexOf("daCoDon(", viTriTaoDon);
+// 10/10/2026: chặn MÃI MÃI theo "hội thoại đã có đơn" làm mất lần mua thứ hai (Messenger giữ một hội thoại mãi mãi) →
+// nay xét ĐƠN GẦN NHẤT còn mở; cùng hàng thì thoát, khác hàng thì báo chủ shop rồi thoát — không im lặng.
+const viTriChongTrung = nguonSales.lastIndexOf("donGanNhat(", viTriTaoDon);
 const viTriThoatDon = nguonSales.indexOf("return;", viTriChongTrung);
-kiem("cấu trúc", "AI kiểm đã-có-đơn trước khi tự lên đơn",
-  viTriChongTrung !== -1 && viTriChongTrung < viTriTaoDon, true);
+kiem("cấu trúc", "AI kiểm đơn gần nhất còn mở trước khi tự lên đơn (khác hàng thì báo chủ shop, không im lặng)",
+  [viTriChongTrung !== -1 && viTriChongTrung < viTriTaoDon,
+    /Khách muốn đặt THÊM \(\$\{[\s\S]{0,80}?\}\) trong khi đơn \$\{donCu\.code\} chưa giao/.test(nguonSales)], [true, true]);
 kiem("cấu trúc", "đã có đơn thì thoát ra, không chạy tới lệnh tạo",
   viTriThoatDon !== -1 && viTriThoatDon < viTriTaoDon, true);
 
@@ -1493,7 +1496,7 @@ kiem("xưởng AI", "ảnh: giá trên nút tạo; phong cách và giới hạn 
       /<Route path="\/admin" element=\{<QuanLy user=\{user\} \/>\} \/>/.test(nguonAppQL),
       // Quay lại từ tài khoản đã mở: về đúng màn hình quản lý của tầng mình.
       /onQuayLai=\{\(\) => \{ window\.location\.href = '\/quan-ly'; \}\}/.test(nguonAppQL) &&
-        /<Route path="\/quan-ly" element=\{<Navigate to="\/admin" replace \/>\} \/>/.test(nguonAppQL)],
+        /<Route path="\/quan-ly" element=\{<Navigate to=\{user\?\.role === 'admin' \? '\/admin' : '\/quan-ly-trang'\} replace \/>\} \/>/.test(nguonAppQL)],
     [false, true, true, true]);
   kiem("đồng nhất", "cùng tên menu, cùng biểu tượng, cùng tiêu đề thanh trên ở cả hai tầng",
     [(nguonMenuQL.match(/\{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '\/(quan-ly-trang|admin)' \}/g) ?? []).length,
@@ -1862,8 +1865,7 @@ kiem("giá đơn", "đối chiếu giá theo Trang",
 kiem("giá đơn", "không biết Trang thì KHÔNG xác nhận giá nào",
   /if \(!trangId\) return false;/.test(nguonSales), true);
 kiem("giá đơn", "chặn giá lạ thì báo chủ shop, không im lặng",
-  /không có \n?\s*`\s*\+\s*`trong tài liệu của shop/.test(nguonSales) ||
-    /không có/.test(nguonSales) && /baoChuShop\([\s\S]{0,200}?giaAiBoc/.test(nguonSales), true);
+  /if \(giaSai\.length\) \{\s*await baoChuShop\(\s*conversation,\s*`AI bóc ra đơn giá \$\{giaSai\.join\(", "\)\} nhưng con số này không có trong tài liệu của shop/.test(nguonSales), true);
 /*
  * Chạy thật hàm so giá, không so chuỗi mã nguồn.
  *
@@ -2648,17 +2650,15 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
 {
   const nguonApi = fs.readFileSync(path.join(GOC, "src/lib/api.ts"), "utf8");
 
-  kiem("đổi Trang đổi não", "mọi lệnh về bộ não tự mang mã Trang đang chọn",
-    /function duongCoTrang\(path: string\): string/.test(nguonApi) &&
-      /await fetch\(`\/api\$\{duongCoTrang\(path\)\}`/.test(nguonApi), true);
-
-  // Đính vào MỌI đường dẫn thì các màn hình khác lãnh đủ tham số thừa; đính
-  // bằng tay ở từng màn hình thì sớm muộn có chỗ quên. Chỉ /ai/ và làm một chỗ.
-  kiem("đổi Trang đổi não", "chỉ đính vào lệnh AI, không rải khắp nơi",
-    /if \(!path\.startsWith\("\/ai\/"\)\) return path;/.test(nguonApi), true);
-
-  kiem("đổi Trang đổi não", "không đè mã Trang mà lệnh đã tự ghi",
-    /if \(\/\[\?&\]accountId=\/\.test\(path\)\) return path;/.test(nguonApi), true);
+  // 10/10/2026 — khối não: lớp gọi API đính KHỐI NÃO đang chọn (X-Trang) vào MỌI yêu cầu, một chỗ duy nhất; máy chủ kiểm
+  // quyền mở trang (server/khoi-nao.ts) nên sửa tay trong trình duyệt cũng không chạm sang trang ngoài phạm vi.
+  kiem("đổi Trang đổi não", "mọi lệnh tự mang khối não đang chọn (X-Trang), đính ở một chỗ duy nhất",
+    /\.\.\.\(trangDangChon\(\) \? \{ "X-Trang": trangDangChon\(\)! \} : \{\}\),/.test(nguonApi) &&
+      /await fetch\(`\/api\$\{path\}`/.test(nguonApi), true);
+  kiem("đổi Trang đổi não", "không còn dùng mã KÊNH làm khoá bộ não (kênh đổi Fanpage thì mã kênh giữ nguyên)",
+    /X-Kenh|duongCoTrang/.test(nguonApi), false);
+  kiem("đổi Trang đổi não", "đổi khối não thì mọi màn hình nạp lại từ đầu (không màn hình nào giữ dữ liệu trang cũ)",
+    /<div key=\{nao\?\.trang_id \?\? 'chua-co'\} className="contents">/.test(fs.readFileSync(path.join(GOC, "src/App.tsx"), "utf8")), true);
 
   // Giữ một bản sao trong bộ nhớ thì effect của màn hình con chạy trước effect
   // của provider, lần gọi đầu sau khi đổi Trang vẫn mang mã cũ. Đọc thẳng kho.
@@ -2671,13 +2671,13 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    * hình nào chỉ trông vào activeAccountId sẽ không thấy gì thay đổi và vẫn vẽ
    * bộ não của Fanpage cũ. Vì vậy phải có sẵn activeTrangId để trông vào.
    */
-  kiem("đổi Trang đổi não", "giao diện trông được cả trang_id, không chỉ mã kênh",
+  kiem("đổi Trang đổi não", "giao diện trông được trang_id của khối não đang chọn",
     /activeTrangId: number \| null;/.test(nguonTrangCtx) &&
-      /activeTrangId: trangDangDung,/.test(nguonTrangCtx), true);
+      /activeTrangId: nao\?\.trang_id \?\? null,/.test(nguonTrangCtx), true);
   kiem("đổi Trang đổi não", "hai bên dùng chung một khoá, không ai tự chế chuỗi",
-    /export const KHOA_TRANG_DANG_CHON = "zn_active_account";/.test(nguonApi) &&
-      /const STORAGE_KEY = KHOA_TRANG_DANG_CHON;/.test(nguonTrangCtx) &&
-      !/STORAGE_KEY = ['"]zn_active_account['"]/.test(nguonTrangCtx), true);
+    /export const KHOA_TRANG_DANG_CHON = "zn_khoi_nao";/.test(nguonApi) &&
+      (nguonTrangCtx.match(/KHOA_TRANG_DANG_CHON/g) ?? []).length >= 3 &&
+      !/['"]zn_khoi_nao['"]/.test(nguonTrangCtx), true);
 
   /*
    * Đổi Trang mà màn hình không nạp lại thì nó vẫn vẽ não của Trang cũ, chủ
@@ -3401,23 +3401,21 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    * Trộn chung rồi chặn từng đường thì phải có HAI tuyến "*" cùng lúc trong
    * một <Routes>, mà như vậy là mơ hồ — không có gì bảo đảm tuyến nào thắng.
    */
+  // 10/10/2026 — khối não: MỘT bộ đường dẫn cho mọi vai trò (khác nhau chỉ ở phần quản lý), MỘT tuyến bắt-tất-cả.
   const soBatTatCa = (nguonApp.match(/<Route path="\*"/g) ?? []).length;
-  kiem("phân tầng", "chủ chuỗi có bộ tuyến đường riêng, không hai tuyến bắt-tất-cả chung",
-    /user\?\.role === 'admin_con' \? \(\s*\n\s*<Routes>/.test(nguonApp) && soBatTatCa === 2,
-    true);
+  kiem("phân tầng", "một bộ tuyến đường cho mọi vai trò, một tuyến bắt-tất-cả (không mơ hồ tuyến nào thắng)",
+    [soBatTatCa, /user\?\.role === 'admin_con' && <Route path="\/quan-ly-trang"/.test(nguonApp)], [1, true]);
 
   /*
-   * Chủ chuỗi không có Fanpage, hộp thư hay đơn hàng của riêng mình. Bày ra
-   * cho họ một Hộp Thư luôn rỗng chỉ làm họ tưởng hệ thống hỏng. Không xoá màn
-   * hình nào — tài khoản trang vẫn thấy đủ, và chủ chuỗi thấy lại ngay khi mở
-   * một trang.
+   * Chủ chuỗi CHƯA có trang nào thì không bày khối não / hộp thư rỗng (tưởng hệ thống hỏng) — chỉ phần quản lý. Có trang
+   * (tài khoản con) thì chọn trang ở bộ chọn và làm việc thẳng trên khối não đó.
    */
   const nguonMenu = fs.readFileSync(path.join(GOC, "src/components/Sidebar.tsx"), "utf8");
-  kiem("phân tầng", "chủ chuỗi không thấy màn hình bán hàng trống rỗng",
-    /const group1 = laChuChuoi\s*\n\s*\? \[\]/.test(nguonMenu) &&
-      /const group2 = laChuChuoi\s*\n\s*\? \[\]/.test(nguonMenu), true);
-  kiem("phân tầng", "chủ chuỗi không thấy bộ chọn Fanpage luôn rỗng",
-    /\{!laChuChuoi && \(\s*\n\s*<div className="shrink-0 relative"/.test(nguonMenu), true);
+  kiem("phân tầng", "chưa có trang nào thì không bày khối não rỗng",
+    /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? \[/.test(nguonMenu) &&
+      /const nhomDuLieu = coNao\s*\n\s*\? \[/.test(nguonMenu), true);
+  kiem("phân tầng", "bộ chọn trang chỉ hiện khi có trang để chọn hoặc là tài khoản quản lý",
+    /\{coNao \|\| laChuChuoi \|\| laQuanTri \? <ChonKhoiNao \/> : null\}/.test(nguonMenu), true);
 }
 
 // ---------------------------------------------------------------------------
@@ -5027,7 +5025,8 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
 
   // Mọi hộp thoại đi qua khung chung. Chỉ còn lớp phủ của menu/thanh bên được dùng fixed inset-0.
   // DangXemThay.tsx: menu xổ xuống trong thanh tiêu đề (như menu tài khoản của TopNavBar) — lớp phủ để bấm ra ngoài thì đóng.
-  const DUOC_PHEP = ["HopThoai.tsx", "Sidebar.tsx", "TopNavBar.tsx", "Orders.tsx", "DangXemThay.tsx"];
+  // ChonKhoiNao.tsx: menu xổ xuống của bộ chọn Trang bán hàng — lớp phủ chỉ để bấm ra ngoài thì đóng (như DangXemThay).
+  const DUOC_PHEP = ["HopThoai.tsx", "Sidebar.tsx", "TopNavBar.tsx", "Orders.tsx", "DangXemThay.tsx", "ChonKhoiNao.tsx"];
   // Chủ dự án chọn tông của thanh menu cho cả app: nền lưới + quầng sáng xanh ngọc.
   kiem("giao diện", "nền chung của app cùng chất liệu với menu",
     /\.nen-app \{[\s\S]{0,600}?background-size: auto, auto, 24px 24px, 24px 24px;/.test(nguonCss) &&
@@ -5330,7 +5329,7 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /const trangId = shop\.trang_id!;\s*const xong = await chayChoTrang\(trangId, \(\) => lamMotO\(shop\.user_id, trangId,/.test(ap),
       /await chayChoTrang\(v\.trang_id \?\? null, \(\) => xuLyMotViec\(v\)\);/.test(vd),
       /await chayChoTrang\(d\.trang_id, \(\) => tienMotDuAn\(d\)\);/.test(vdd),
-      /"X-Kenh": kenhDangChon\(\)!/.test(doc("src/lib/api.ts"))],
+      /"X-Trang": trangDangChon\(\)!/.test(doc("src/lib/api.ts"))],
     [true, true, true, true, true, true, true, true]);
 
   const tq = doc("server/services/tong-quan.ts");
@@ -5345,9 +5344,10 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     [true, true, true, false]);
   kiem("tiền theo trang", "một đường tổng quan / sao kê trang cho cả hai tầng; admin con chỉ trong chuỗi mình (ngoài chuỗi → 404)",
     [/vaiTro === "admin" \? \{ loai: "tong" \} : \{ loai: "chuoi", chaId: req\.user!\.id \}/.test(ql),
-      /WHERE t\.id = \$1 AND \(\$2::bigint IS NULL OR u\.id = \$2 OR u\.parent_id = \$2\)/.test(ql),
+      // Phạm vi trang = ĐÚNG luật mở khối não (server/khoi-nao.ts — kiểm ở mục "khối não"), không bản thứ hai.
+      /const nao = await moKhoiNao\(user, Number\(giaTri\)\);/.test(ql),
       // MỘT hàm kiểm phạm vi, MỌI đường báo cáo trang đều gọi nó.
-      /if \(!thuoc\) throw new AppError\("Không tìm thấy trang này", 404\);\s*return trangId;/.test(ql) &&
+      /if \(!nao\) throw new AppError\("Không tìm thấy trang này", 404\);\s*return nao\.trangId;/.test(ql) &&
         // n/n: MỌI chỗ đọc mã trang từ yêu cầu đều đi qua chốt (trước đây đếm cứng "3" — thêm route đúng chuẩn cũng báo hỏng).
         (ql.match(/const trangId = await trangTrongPhamVi\(req\.user!, req\.(query|body)\??\.trangId\);/g) ?? []).length ===
           (ql.match(/req\.(query|body)\??\.trangId/g) ?? []).length],
@@ -5370,7 +5370,7 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     [true, true, true, true, true]);
   kiem("tiền theo trang", "đơn hàng ghi trang + kênh NGAY LÚC TẠO (có hội thoại → kênh hội thoại; tạo tay → trang của khối não đang chọn), trang phải của đúng tài khoản",
     [/kenhId = k\.rows\[0\]\?\.social_account_id \?\? null;\s*trangId = k\.rows\[0\]\?\.trang_id \?\? null;/.test(od),
-      /\(SELECT id FROM trang WHERE id = \$16 AND user_id = \$1\), \$17, \$18, \$19\)/.test(od),
+      /\(SELECT id FROM trang WHERE id = \$16 AND user_id = \$1\), \$17, \$18, \$19, \$20::jsonb\)/.test(od),
       // Đơn luôn thuộc KHỐI NÃO đang chọn; có hội thoại thì hội thoại phải của đúng trang đó.
       /trangId: nao\.trangId,/.test(odr) && /SELECT 1 FROM conversations WHERE id = \$1 AND trang_id = \$2/.test(odr),
       fs.existsSync(path.join(GOC, "server/migrations/041_don_va_kenh_theo_trang.sql"))],
