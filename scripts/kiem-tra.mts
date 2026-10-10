@@ -400,8 +400,9 @@ for (const [ham, truong] of [
 }
 kiem("quảng cáo", "đổi ngân sách nhóm QC phải đọc kiểm chủ sở hữu trước",
   /getAdSet\(\{ adSetId: req\.params\.id, accountId: resolved\.accountId \}\)/.test(nguonAdsRt), true);
-kiem("quảng cáo", "mọi route quảng cáo đều xác định tài khoản của shop",
-  (nguonAdsRt.match(/resolveAdAccount\(req\.user!\.id\)/g) ?? []).length >= 8, true);
+kiem("quảng cáo", "mọi route quảng cáo đều xác định tài khoản quảng cáo của KHỐI NÃO đang chọn",
+  [(nguonAdsRt.match(/resolveAdAccount\(naoCua\(req\)\.trangId\)/g) ?? []).length >= 8,
+    /resolveAdAccount\(req\.user/.test(nguonAdsRt)], [true, false]);
 
 // ---------------------------------------------------------------------------
 // 12. Hộp thư — ghi chú hệ thống không được trông như tin đã gửi cho khách
@@ -479,7 +480,7 @@ kiem("đơn hàng", "đọc trạng thái cũ TRƯỚC khi cập nhật để bi
 // ---------------------------------------------------------------------------
 const nguonTK = fs.readFileSync(path.join(GOC, "server/routes/analytics.ts"), "utf8");
 kiem("thống kê", "ngày báo cáo lấy theo giờ Việt Nam",
-  /VALUES \(\$1, \(now\(\) AT TIME ZONE 'Asia\/Ho_Chi_Minh'\)::date/.test(nguonTK), true);
+  /VALUES \(\$1, \$5, \(now\(\) AT TIME ZONE 'Asia\/Ho_Chi_Minh'\)::date/.test(nguonTK), true);
 kiem("thống kê", "không còn chỗ nào dùng CURRENT_DATE của database",
   nguonTK.split("\n").filter((d) => d.includes("CURRENT_DATE") && !d.trim().startsWith("*")).length,
   0);
@@ -1453,7 +1454,7 @@ kiem("xưởng AI", "ảnh: giá trên nút tạo; phong cách và giới hạn 
       /if \(!TRANG_THAI_CHO_VIDEO\.includes\(bai\.status\)\) throw new AppError/.test(hamTB),
       /const lyDo = lyDoKhongHop\(model, p\.lc\);\s*if \(lyDo\) throw new AppError/.test(hamTB),
       /if \(gia === null\) throw new AppError/.test(hamTB),
-      /SET status = 'pending_approval', cho_video_id = \$3, cho_video_guard = 'publish', updated_at = now\(\)\s*WHERE id = \$1 AND user_id = \$2 AND status = ANY\(\$4::text\[\]\)/.test(hamTB),
+      /SET status = 'pending_approval', cho_video_id = \$3, cho_video_guard = 'publish', updated_at = now\(\)\s*WHERE id = \$1 AND trang_id = \$2 AND status = ANY\(\$4::text\[\]\)/.test(hamTB),
       /const TRANG_THAI_CHO_VIDEO = \["draft", "pending_approval", "scheduled", "failed"\];/.test(nguonLichTB),
       // Lịch tự đăng vẫn chặn trần tiền tháng; bài soạn tay thì chủ shop đã thấy giá và bấm đồng ý.
       /tienVideoTuDongThang/.test(hamTB)],
@@ -1566,7 +1567,7 @@ kiem("chống treo", "hàng đợi ứ quá lâu thì báo Telegram cho chủ sh
 
 const nguonRouteAi = fs.readFileSync(path.join(GOC, "server/routes/ai.ts"), "utf8");
 kiem("tự chủ", "bật tự chủ thì cứu ngay hội thoại đang chờ người thật",
-  /status = 'ai', ai_enabled = TRUE[\s\S]{0,200}?WHERE user_id = \$1 AND status = 'waiting_human'/.test(
+  /status = 'ai', ai_enabled = TRUE[\s\S]{0,200}?WHERE trang_id = \$1 AND status = 'waiting_human'/.test(
     nguonRouteAi
   ), true);
 kiem("tự chủ", "không đụng vào hội thoại chủ shop đang tự tay trả lời",
@@ -1640,8 +1641,8 @@ kiem("nhiều shop", "hạn mức sống được chia cho số shop đang gửi
   /const chia = Math\.max\(1, Math\.floor\(live\.limit \/ Math\.max\(1, soShop\)\)\)/.test(
     nguonHangRao
   ), true);
-kiem("nhiều shop", "đếm shop đang gửi theo dữ liệu thật, không đoán",
-  /COUNT\(DISTINCT user_id\)::int AS n FROM send_attempts/.test(nguonHangRao), true);
+kiem("nhiều shop", "đếm KHỐI NÃO đang gửi theo dữ liệu thật, không đoán",
+  /COUNT\(DISTINCT trang_id\)::int AS n FROM send_attempts/.test(nguonHangRao), true);
 kiem("nhiều shop", "nhớ tạm để không thêm truy vấn vào mỗi tin gửi",
   /Date\.now\(\) - nhoSoShop\.luc < 30_000/.test(nguonHangRao), true);
 kiem("nhiều shop", "một mình dùng thì vẫn được trọn hạn mức",
@@ -1770,9 +1771,11 @@ const nguonDangKy = fs.readFileSync(path.join(GOC, "server/routes/auth.ts"), "ut
 kiem("quản trị", "đường tự đăng ký cũng đi qua đúng hàm đó",
   /await taoTaiKhoan\(\{/.test(nguonDangKy) &&
     !/INSERT INTO users \(email, password_hash, name\)/.test(nguonDangKy), true);
-kiem("quản trị", "tài khoản mới nhận đủ bộ cấu hình riêng",
-  /DEFAULT_AI_CONFIGS/.test(nguonTaiKhoan) &&
-    /DEFAULT_HANDOFF_RULES/.test(nguonTaiKhoan) &&
+// Khối não (4 AI + luật nhường người + hàng rào) do database tự dựng khi trang được tạo — migration 048.
+const nguonMig048 = fs.readFileSync(path.join(GOC, "server/migrations/048_tu_dung_khoi_nao.sql"), "utf8");
+kiem("quản trị", "tài khoản mới nhận đủ bộ cấu hình riêng (khối não tự dựng theo trang)",
+  /CREATE TRIGGER dung_khoi_nao AFTER INSERT ON trang/.test(nguonMig048) &&
+    /INSERT INTO trang \(user_id, profile_ref, ten\)/.test(nguonTaiKhoan) &&
     /INSERT INTO telegram_configs/.test(nguonTaiKhoan) &&
     /ensureProfile\(/.test(nguonTaiKhoan), true);
 /*
@@ -2285,16 +2288,16 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
 // Ví dụ chỉ được viết MỜ trong ô nhập: chỉ đường, không thành nội dung.
 // ---------------------------------------------------------------------------
 {
-  const nguonTaoTk = fs.readFileSync(path.join(GOC, "server/services/tai-khoan.ts"), "utf8");
-  const maTaoTk = boChuThich(nguonTaoTk);
+  // Khối não mới dựng ở migration 048 (dung_khoi_nao): 4 dòng AI, lời dặn '' — chỉ chủ shop biết shop mình bán gì.
+  const maTaoTk = fs.readFileSync(path.join(GOC, "server/migrations/048_tu_dung_khoi_nao.sql"), "utf8");
+  const bonAi = /SELECT p_user, p_trang, k, '' FROM unnest\(ARRAY\[([^\]]*)\]\) AS k/.exec(maTaoTk)?.[1] ?? "";
   for (const loai of ["sales", "content", "ads", "analytics"]) {
-    kiem("bộ não trống", `tài khoản mới: vai trò '${loai}' để trống`,
-      new RegExp(`\\{ kind: "${loai}", prompt: "" \\}`).test(maTaoTk), true);
+    kiem("bộ não trống", `tài khoản mới: vai trò '${loai}' để trống`, bonAi.includes(`'${loai}'`), true);
   }
   kiem("bộ não trống", "không còn lời dặn mẫu nào nhét sẵn",
     /Bạn là (nhân viên bán hàng|chuyên gia quảng cáo|chuyên viên|người viết)/.test(maTaoTk), false);
   kiem("bộ não trống", "vẫn tạo đủ bốn dòng để giao diện có chỗ ghi",
-    (maTaoTk.match(/\{ kind: "\w+", prompt: "" \}/g) ?? []).length, 4);
+    (bonAi.match(/'\w+'/g) ?? []).length, 4);
   /*
    * Luật an toàn KHÔNG phải nội dung huấn luyện.
    *
@@ -2302,8 +2305,8 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    * đi thì tài khoản mới chạy trần trụi. Giữ nguyên, có chủ đích.
    */
   kiem("bộ não trống", "luật an toàn vẫn bật sẵn cho tài khoản mới",
-    /\{ key: "ask_human", enabled: true \}/.test(maTaoTk) &&
-      /\{ key: "complaint", enabled: true \}/.test(maTaoTk), true);
+    /\('ask_human', TRUE,/.test(maTaoTk) &&
+      /\('complaint', TRUE,/.test(maTaoTk), true);
 
   const nguonKichBan = fs.readFileSync(path.join(GOC, "src/pages/AutoScripts.tsx"), "utf8");
   kiem("bộ não trống", "ô nhập vai trò có ví dụ viết mờ",
@@ -2594,8 +2597,9 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
   // Phép kiểm cũ chỉ hỏi "tệp này có câu LEFT JOIN nào không" — mà tệp có HAI
   // câu truy vấn hội thoại. Bỏ câu này thì câu kia vẫn làm phép kiểm xanh.
   // Nay soi từng câu một, buộc cả hai đều phải tự lấy trang_id.
+  // Hội thoại mang trang_id của chính nó (migration 047 — tự điền theo kênh khi ghi).
   kiem("bộ não theo Trang", "hội thoại mang sẵn trang_id, suy một lần",
-    /s\.trang_id\s*\n\s*FROM conversations c\s*\n\s*LEFT JOIN social_accounts s ON s\.id = c\.social_account_id/
+    /c\.trang_id\s*\n\s*FROM conversations c\s*\n\s*WHERE c\.id = \$1/
       .test(nguonBan2) &&
       /trang_id: number \| null;/.test(nguonBan2), true);
   kiem("bộ não theo Trang", "gợi ý trả lời cũng lấy trang_id từ kênh",
@@ -2611,11 +2615,9 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
   // thích hoá vẫn qua được. Nay đòi đủ cả câu lệnh lẫn chỗ dùng id trả về —
   // chữ suông không còn đủ.
   kiem("bộ não theo Trang", "tài khoản mới sinh kèm Trang đầu tiên",
-    /INSERT INTO trang \(user_id, profile_ref, ten\)\s*\n\s*VALUES \(\$1, \$2, \$3\) RETURNING id/
-      .test(nguonTaoTk2) &&
-      /const trangId = trangMoi\.rows\[0\]\.id;/.test(nguonTaoTk2) &&
-      /INSERT INTO ai_configs \(user_id, trang_id, kind, system_prompt\)/.test(nguonTaoTk2) &&
-      /\[userId, trangId, config\.kind, config\.prompt\]/.test(nguonTaoTk2), true);
+    /`INSERT INTO trang \(user_id, profile_ref, ten\) VALUES \(\$1, \$2, \$3\)`,\s*\n\s*\[userId, `cho-cap-\$\{userId\}`, "Trang đầu tiên"\]/
+      .test(boChuThich(nguonTaoTk2)) &&
+      /PERFORM dung_khoi_nao\(NEW\.id, NEW\.user_id\)/.test(nguonMig048), true);
 
   const nguonTk = fs.readFileSync(path.join(GOC, "server/services/accounts.ts"), "utf8");
   kiem("bộ não theo Trang", "hồ sơ thật thay mã tạm của Trang đầu tiên",
@@ -2991,7 +2993,7 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    * họ, mình từ chối ở đây nhưng vẫn bị tính tiền và vẫn phải đi dọn.
    */
   kiem("phân tầng", "chặn Fanpage thứ hai TRƯỚC khi gọi nhà cung cấp",
-    /await chanNeuThemFanpage\(req\.user!\.id, pageIds\);[\s\S]{0,400}?selectFacebookPage\(/
+    /await chanNeuThemFanpage\(chu\.id, pageIds\);[\s\S]{0,400}?selectFacebookPage\(/
       .test(nguonNoi2), true);
 
   /*
@@ -3347,7 +3349,7 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    */
   kiem("phân tầng", "chủ chuỗi không được cấp Trang và bộ não",
     /const laChuChuoi = params\.role === "admin_con";/.test(nguonTk3) &&
-      /if \(!laChuChuoi\) \{\s*\n\s*const trangMoi = await client\.query/.test(nguonTk3), true);
+      /if \(!laChuChuoi\) \{\s*\n\s*\/\/[^\n]*\n\s*await client\.query\(\s*\n\s*`INSERT INTO trang/.test(nguonTk3), true);
   kiem("phân tầng", "chủ chuỗi không được cấp hồ sơ nhà cung cấp",
     /if \(!laChuChuoi\) await ensureProfile\(/.test(nguonTk3), true);
 
@@ -4034,8 +4036,11 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
 
   // Đã đo: tài khoản chưa có Trang bấm lưu cài đặt AI → 5 đường vỡ 500.
   const nguonAI = boChuThichTS(fs.readFileSync(path.join(GOC, "server/routes/ai.ts"), "utf8"));
+  // Một chỗ duy nhất: naoCua (server/khoi-nao.ts) báo 409 "chưa chọn trang" — route AI không tự đoán trang nữa.
+  const nguonKhoiNao = fs.readFileSync(path.join(GOC, "server/khoi-nao.ts"), "utf8");
   kiem("chưa có Trang", "ghi khi chưa có Trang thì báo rõ, không để database vỡ",
-    /if \(trang === null && req\.method !== "GET"\) \{\s*throw new AppError\([\s\S]{0,160}?409\s*\);/.test(nguonAI), true);
+    [/export function naoCua\(req: Request\): KhoiNao \{\s*if \(!req\.nao\) throw new AppError\([^)]*409\);/.test(nguonKhoiNao),
+      /trangCuaReq|layTrangDangChon/.test(nguonAI)], [true, false]);
 
   // Đã đo: nhà cung cấp ảnh từ chối khoá → trả 401 → giao diện đăng xuất người dùng.
   const nguonAnh = boChuThichTS(fs.readFileSync(path.join(GOC, "server/services/image-ai.ts"), "utf8"));
@@ -5172,7 +5177,7 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     { bat: true, model: "openai/gpt-image-1-mini", doNet: undefined, chatLuong: "low", khung: undefined, chuTrongAnh: "khong", chanNhanHieuGia: false, chanNguoiThat: true });
   const nguonLich = fs.readFileSync(path.join(GOC, "server/services/autopilot.ts"), "utf8");
   kiem("ảnh tự động", "ảnh đi cùng bài: lưu vào media của bài, ghi sổ việc riêng, theo luật/chữ người dùng chọn",
-    [/INSERT INTO posts \(user_id, content, media,/.test(nguonLich), /JSON\.stringify\(media\),/.test(nguonLich), /viec: "tao_anh_tu_dong",/.test(nguonLich),
+    [/INSERT INTO posts \(user_id, trang_id, content, media,/.test(nguonLich), /JSON\.stringify\(media\),/.test(nguonLich), /viec: "tao_anh_tu_dong",/.test(nguonLich),
       /chuTrongAnh: cau\.anh\.chuTrongAnh,/.test(nguonLich), /media = \[\{ url: anh\.url, type: "image" \}\];/.test(nguonLich)], [true, true, true, true, true]);
   kiem("ảnh tự động", "vẽ ảnh lỗi → bài chuyển chờ duyệt (không tự đăng trơn chữ), ghi rõ lý do, báo Telegram",
     [/const guard: AutoPilotConfig\["guard"\] = loiAnh \? "approve" : cau\.guard;/.test(nguonLich), /guard === "publish" \? "draft" : "pending_approval"/.test(nguonLich),
@@ -5227,8 +5232,8 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   kiem("thư viện", "chỉ nhận ảnh từ kho của app, JPG/PNG/WebP, tối đa 5 MB, 60 ảnh mỗi Trang",
     [/if \(!laDiaChiKho\(that\)\) throw new AppError/.test(nguonTv), /const KIEU_HOP_LE = \["image\/jpeg", "image\/png", "image\/webp"\];/.test(nguonTv),
       /if \(du\.length > TOI_DA_BYTE\) throw/.test(nguonTv), /if \(Number\(dem\?\.n \?\? 0\) >= TOI_DA_MOI_TRANG\)/.test(nguonTv)], [true, true, true, true]);
-  kiem("thư viện", "ảnh chỉ chủ tài khoản đọc được; dùng / xoá chỉ trong Trang của mình",
-    [/WHERE id = \$1 AND user_id = \$2/.test(nguonTv), /FROM thu_vien_anh WHERE id = \$1 AND trang_id = \$2/.test(nguonTv), /DELETE FROM thu_vien_anh WHERE id = \$1 AND trang_id = \$2/.test(nguonTv)],
+  kiem("thư viện", "ảnh chỉ khối não (trang) của ảnh đọc được; dùng / xoá chỉ trong Trang của mình",
+    [/SELECT kieu, du_lieu FROM thu_vien_anh WHERE id = \$1 AND trang_id = \$2/.test(nguonTv), /FROM thu_vien_anh WHERE id = \$1 AND trang_id = \$2/.test(nguonTv), /DELETE FROM thu_vien_anh WHERE id = \$1 AND trang_id = \$2/.test(nguonTv)],
     [true, true, true]);
 }
 
@@ -5265,14 +5270,14 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /UPDATE video_ai SET tu_dong = TRUE WHERE id = \$1/.test(nguonLichV),
       /date_trunc\('month', now\(\) AT TIME ZONE 'Asia\/Ho_Chi_Minh'\)/.test(nguonLichV)], [true, true, true, true]);
   kiem("video tự động", "bài chờ video không đăng ngay; giữ chế độ đăng đã chọn để áp khi video xong",
-    [/VALUES \(\$1, \$2, \$3::jsonb, \$4::text\[\], 'pending_approval', TRUE, \$5, NULL, \$6, \$7\)/.test(nguonLichV),
-      /\[userId, noiDung, JSON\.stringify\(media\), kenh\.rows\.map\(\(k\) => k\.id\), chuDe, choVideo\.id, guard\]/.test(nguonLichV)], [true, true]);
+    [/VALUES \(\$1, \$8, \$2, \$3::jsonb, \$4::text\[\], 'pending_approval', TRUE, \$5, NULL, \$6, \$7\)/.test(nguonLichV),
+      /\[userId, noiDung, JSON\.stringify\(media\), kenh\.rows\.map\(\(k\) => k\.id\), chuDe, choVideo\.id, guard, trangId\]/.test(nguonLichV)], [true, true]);
   kiem("video tự động", "video xong → gắn video; lỗi / quá 25 phút → ảnh thay thế; giành bài trước để không xử lý trùng; áp đúng chế độ đăng",
     [CHO_VIDEO_TOI_DA_PHUT, /UPDATE posts SET cho_video_id = NULL WHERE id = \$1 AND cho_video_id = \$2 RETURNING id/.test(nguonLichV),
       /media = \[\.\.\.media, \{ url: b\.url, type: "video" \}\];/.test(nguonLichV),
       // Ảnh thay thế chạy trong ngữ cảnh Trang của bài (tiền ảnh ghi đúng trang).
       /if \(!media\.some\(\(m\) => m\.type === "image"\)\) \{\s*try \{\s*const thay = await chayChoTrang\(b\.trang_id, \(\) => anhThayThe\(/.test(nguonLichV),
-      /if \(guard === "publish"\) \{\s*await query\("UPDATE posts SET status = 'draft' WHERE id = \$1", \[b\.id\]\);\s*await publishPost\(b\.user_id, b\.id\);/.test(nguonLichV),
+      /if \(guard === "publish"\) \{\s*await query\("UPDATE posts SET status = 'draft' WHERE id = \$1", \[b\.id\]\);\s*await publishPost\(b\.trang_id, b\.id\);/.test(nguonLichV),
       /WHERE p\.cho_video_id IS NOT NULL AND p\.status = 'pending_approval'/.test(nguonLichV)], [25, true, true, true, true, true]);
   kiem("video tự động", "lưu lịch: bật video thì phải chọn mô hình làm được và có trần tiền tháng",
     [/if \(!sach\.video\.model\) throw new AppError/.test(nguonRtV), /const lyDoV = lyDoKhongHop\(mv,/.test(nguonRtV),
@@ -5315,12 +5320,14 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   const ap = doc("server/services/autopilot.ts");
   const vd = doc("server/services/video-ai.ts");
   const vdd = doc("server/services/video-dai.ts");
-  kiem("tiền theo trang", "mọi điểm vào đặt Trang đang làm việc: yêu cầu từ màn hình (suy từ kênh, không tin số trang từ ngoài) và mọi việc nền",
-    [/chayVoiCachTim\(\(\) => layTrangDangChon\(userId, kenh \?\? null\), next\);/.test(app),
-      /req\.get\("x-kenh"\)/.test(app),
+  // Yêu cầu từ màn hình: khối não của yêu cầu do server/khoi-nao.ts xác định (kiểm quyền mở trang) → ngữ cảnh tiền AI.
+  const kn = doc("server/khoi-nao.ts");
+  kiem("tiền theo trang", "mọi điểm vào đặt Trang đang làm việc: yêu cầu từ màn hình (khối não đã kiểm quyền, không tin số trang từ ngoài) và mọi việc nền",
+    [/app\.use\("\/api", ganKhoiNao\);\s*app\.use\("\/api", \(req, _res, next\) => \{\s*const trangId = req\.nao\?\.trangId \?\? null;\s*chayChoTrang\(trangId, next\);/.test(app),
+      /const nao = await moKhoiNao\(req\.user, Number\(xTrang\)\);\s*if \(!nao\) return next\(new AppError\("Không tìm thấy trang bán hàng này", 404\)\);/.test(kn),
       /await chayChoKenh\(event\.account_id, \(\) => handleWebhookEvent\(\{/.test(wk),
       /await chayChoKenh\(hoi\.social_account_id, \(\) => soanCauNhac\(hoi, hoi\.nhac_lai_count\)\)/.test(sales),
-      /await chayChoTrang\(shop\.trang_id, \(\) => lamMotO\(/.test(ap),
+      /const trangId = shop\.trang_id!;\s*const xong = await chayChoTrang\(trangId, \(\) => lamMotO\(shop\.user_id, trangId,/.test(ap),
       /await chayChoTrang\(v\.trang_id \?\? null, \(\) => xuLyMotViec\(v\)\);/.test(vd),
       /await chayChoTrang\(d\.trang_id, \(\) => tienMotDuAn\(d\)\);/.test(vdd),
       /"X-Kenh": kenhDangChon\(\)!/.test(doc("src/lib/api.ts"))],
@@ -5361,10 +5368,11 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /count\(\*\) FILTER \(WHERE a\.ma_ncc IS NOT NULL AND a\.doi_chieu_at IS NULL\)::int AS chua_chot/.test(tq),
       (tqUi.match(/<NhanChot chot=\{/g) ?? []).length >= 6],
     [true, true, true, true, true]);
-  kiem("tiền theo trang", "đơn hàng ghi trang + kênh NGAY LÚC TẠO (có hội thoại → kênh hội thoại; tạo tay ≥2 trang → bắt buộc chọn), trang phải của đúng tài khoản",
+  kiem("tiền theo trang", "đơn hàng ghi trang + kênh NGAY LÚC TẠO (có hội thoại → kênh hội thoại; tạo tay → trang của khối não đang chọn), trang phải của đúng tài khoản",
     [/kenhId = k\.rows\[0\]\?\.social_account_id \?\? null;\s*trangId = k\.rows\[0\]\?\.trang_id \?\? null;/.test(od),
       /\(SELECT id FROM trang WHERE id = \$16 AND user_id = \$1\), \$17, \$18, \$19\)/.test(od),
-      /throw new AppError\("Tài khoản có nhiều trang — chọn trang \(kênh\) trước khi tạo đơn\.", 400\);/.test(odr),
+      // Đơn luôn thuộc KHỐI NÃO đang chọn; có hội thoại thì hội thoại phải của đúng trang đó.
+      /trangId: nao\.trangId,/.test(odr) && /SELECT 1 FROM conversations WHERE id = \$1 AND trang_id = \$2/.test(odr),
       fs.existsSync(path.join(GOC, "server/migrations/041_don_va_kenh_theo_trang.sql"))],
     [true, true, true, true]);
   kiem("tiền theo trang", "sổ kênh theo ngày UTC: ghi trạng thái đầu ngày, ghi ngay trước khi đổi Fanpage; tiền kênh chia theo số ngày ở từng trang",
@@ -5762,6 +5770,61 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /loi: "Chưa đọc được số quảng cáo"/.test(tq),
       /loi: e instanceof Error \? e\.message/.test(tq)],
     [true, true, false]);
+}
+
+// ---------------------------------------------------------------------------
+// KHỐI NÃO (chủ dự án chốt 10/10/2026 — docs/khoi-nao.md): mỗi trang một khối não 4 AI liền mạch, độc lập tuyệt đối.
+// Các phép kiểm dưới đây KHOÁ luật đó cho mọi lần sửa sau — đổi phải hỏi chủ dự án.
+// ---------------------------------------------------------------------------
+{
+  const doc2 = (f: string) => fs.readFileSync(path.join(GOC, f), "utf8");
+  const ma = (f: string) => boChuThich(doc2(f));
+  // 1. Route khối não không lọc dữ liệu bằng tài khoản người đăng nhập — chỉ qua naoCua(req).
+  for (const f of ["inbox", "orders", "posts", "ai", "ads", "dashboard", "analytics"]) {
+    const m = ma(`server/routes/${f}.ts`);
+    kiem("khối não", `routes/${f}.ts: dữ liệu khối não chỉ lấy qua naoCua(req), không dùng req.user.id`,
+      [/req\.user!?\.id/.test(m), /naoCua\(req\)/.test(m)], [false, true]);
+  }
+  const caiDat = ma("server/routes/settings.ts");
+  kiem("khối não", "routes/settings.ts: req.user.id chỉ còn ở người nhận Telegram (chủ chuỗi chưa mở trang)",
+    (caiDat.match(/req\.user!\.id/g) ?? []).length, 2);
+  const noi = ma("server/routes/connections.ts");
+  kiem("khối não", "routes/connections.ts: nối / đổi / gỡ kênh làm trên tài khoản CHỦ của trang (chuTaiKhoan — chỉ nơi duy nhất đọc req.user.id)",
+    [(noi.match(/req\.user!\.id/g) ?? []).length, /const id = req\.nao\?\.chuId \?\? req\.user!\.id;/.test(noi)], [2, true]);
+
+  // 2. Một chỗ xác định khối não: kiểm quyền mở (trang của mình · tài khoản con của chủ chuỗi · quản trị tổng).
+  const kn = ma("server/khoi-nao.ts");
+  kiem("khối não", "quyền mở khối não đúng ba trường hợp, ngoài ra 404",
+    /r\.user_id === user\.id \|\|\s*user\.role === "admin" \|\|\s*\(user\.role === "admin_con" && r\.parent_id === user\.id\)/.test(kn), true);
+
+  // 3. Mọi bảng nghiệp vụ mang trang_id; ghi ở đâu cũng tự nhận đúng trang.
+  const m47 = doc2("server/migrations/047_khoi_nao_theo_trang.sql");
+  const bang = ["conversations", "messages", "hoi_thoai_cham", "send_attempts", "comments", "customers", "posts",
+    "auto_pilot_runs", "auto_scripts", "guardrail_configs", "handoff_rules", "telegram_logs", "ai_reports"];
+  kiem("khối não", "13 bảng nghiệp vụ có cột trang_id",
+    bang.filter((b) => !new RegExp(`ALTER TABLE ${b}\\s+ADD COLUMN IF NOT EXISTS trang_id BIGINT REFERENCES trang\\(id\\)`).test(m47)).join(", "), "");
+  kiem("khối não", "11 bảng tự điền trang khi ghi (trigger dien_trang)",
+    (m47.match(/CREATE TRIGGER dien_trang BEFORE INSERT ON \w+/g) ?? []).length, 11);
+  kiem("khối não", "khoá 'mỗi tài khoản một' đổi thành 'mỗi trang một' (khách, ô lịch, hàng rào, luật nhường người, báo cáo)",
+    ["customers_identity_key ON customers (trang_id, platform, participant_id)", "auto_pilot_runs_trang_slot_key ON auto_pilot_runs (trang_id, slot_key)",
+      "guardrail_configs_trang_key ON guardrail_configs (trang_id)", "handoff_rules_trang_key ON handoff_rules (trang_id, rule_key)",
+      "ai_reports_trang_date_key ON ai_reports (trang_id, report_date, kind)"].filter((k) => !m47.includes(k)).join(" | "), "");
+
+  // 4. Trang nào cũng có đủ khối não — database tự dựng cho mọi đường tạo trang.
+  const m48 = doc2("server/migrations/048_tu_dung_khoi_nao.sql");
+  kiem("khối não", "trang mới tự có đủ 4 AI + luật nhường người + hàng rào; trang cũ thiếu được bổ sung",
+    [/CREATE TRIGGER dung_khoi_nao AFTER INSERT ON trang/.test(m48), /SELECT dung_khoi_nao\(id, user_id\) FROM trang;/.test(m48),
+      /ARRAY\['content', 'ads', 'sales', 'analytics'\]/.test(m48)], [true, true, true]);
+
+  // 5. Việc nền chạy theo trang: đăng bài chỉ lên kênh của trang; nhắc khách theo cài đặt tự chủ của đúng trang.
+  const dang = ma("server/services/publish.ts");
+  kiem("khối não", "đăng bài: bài và kênh đích đều lọc theo trang của bài",
+    [/export async function publishPost\(\s*trangId: number,/.test(dang), (dang.match(/WHERE trang_id = \$1 AND connected = TRUE/g) ?? []).length], [true, 2]);
+  const ban = ma("server/services/sales-ai.ts");
+  kiem("khối não", "nhắc khách im lặng quét theo từng trang (không trộn cài đặt tự chủ giữa các trang của một tài khoản)",
+    /SELECT trang_id, settings FROM ai_configs\s*WHERE kind = 'sales' AND trang_id IS NOT NULL/.test(ban) && /WHERE c\.trang_id = \$1\s*AND c\.status = 'ai'/.test(ban), true);
+  kiem("khối não", "luật nhường người và hàng rào đọc theo trang",
+    [/FROM handoff_rules WHERE trang_id = \$1/.test(ban), /FROM guardrail_configs WHERE trang_id = \$1/.test(ma("server/services/guardrails.ts"))], [true, true]);
 }
 
 console.log(`\nĐã kiểm ${tong} điểm.`);
