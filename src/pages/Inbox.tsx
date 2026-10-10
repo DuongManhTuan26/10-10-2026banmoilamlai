@@ -262,14 +262,15 @@ export default function Inbox() {
     setTimeout(() => setShowCopyToast(false), 2000);
   };
 
+  /* Bảng màu thống nhất: chờ người = cần làm ngay (hồng) · AI đang tư vấn = màu miền ③ · sắp hết 24h = cảnh báo (cam)
+     · quá hạn = đỏ · xong = xám. */
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'waiting': return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)] animate-pulse';
-      case 'ai': return 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
-      case 'expiring': return 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
-      case 'expired': return 'bg-red-500';
-      case 'done': return 'bg-gray-500';
-      default: return 'bg-gray-500';
+      case 'waiting': return 'bg-gap animate-pulse';
+      case 'ai': return 'bg-primary';
+      case 'expiring': return 'bg-canh-bao';
+      case 'expired': return 'bg-loi';
+      default: return 'bg-on-surface-variant';
     }
   };
 
@@ -286,11 +287,10 @@ export default function Inbox() {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'waiting': return 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
-      case 'ai': return 'bg-green-500/20 text-green-400 border border-green-500/30';
-      case 'expiring': return 'bg-yellow-400/20 text-yellow-400 border border-yellow-400/30';
-      case 'expired': return 'bg-red-500/20 text-red-400 border border-red-500/30';
-      case 'done': return 'bg-surface-variant text-on-surface-variant border border-outline-variant';
+      case 'waiting': return 'bg-gap/15 text-gap border border-gap/40';
+      case 'ai': return 'bg-primary/15 text-primary border border-primary/40';
+      case 'expiring': return 'bg-canh-bao/15 text-canh-bao border border-canh-bao/40';
+      case 'expired': return 'bg-loi/15 text-loi border border-loi/40';
       default: return 'bg-surface-variant text-on-surface-variant border border-outline-variant';
     }
   };

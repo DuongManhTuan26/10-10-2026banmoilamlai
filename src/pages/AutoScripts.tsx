@@ -1369,7 +1369,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
                 </span>
               )}
               <div className="flex items-baseline gap-2 min-w-[150px]">
-                <span className="font-headline-sm text-2xl font-bold text-on-surface">{o.so}</span>
+                <span className="text-2xl font-bold text-on-surface tabular-nums">{o.so}</span>
                 <div className="flex flex-col leading-tight">
                   <span className="text-sm font-bold text-on-surface">{o.nhan}</span>
                   <span className="text-xs text-on-surface-variant">{o.phu}</span>
@@ -1709,7 +1709,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               </div>
 
               {/* Block 1: TÊN KỊCH BẢN */}
-              <div className="khung-muc mau-xanh">
+              <div className="khung-muc mau-lam">
                 <h3 className="tieu-de-muc dau-muc">TÊN KỊCH BẢN</h3>
                 <input 
                   type="text" 
@@ -1721,7 +1721,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               </div>
 
               {/* Block 2: TỪ KHÓA KÍCH HOẠT */}
-              <div className="khung-muc mau-tim">
+              <div className="khung-muc mau-luc">
                 <h3 className="tieu-de-muc dau-muc">TỪ KHÓA KÍCH HOẠT</h3>
                 
                 <div className="bg-surface-container rounded-xl border border-outline-variant p-4 md:p-5 space-y-6">
@@ -1875,7 +1875,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
 
               {/* Block 3: TIN NHẮN RIÊNG SẼ GỬI */}
               {loaiKichBan === 'dm' && (
-              <div className="khung-muc mau-cam">
+              <div className="khung-muc mau-xam">
                 <h3 className="tieu-de-muc dau-muc">TIN NHẮN RIÊNG SẼ GỬI</h3>
                 <textarea 
                   rows={5}
@@ -2002,7 +2002,7 @@ export default function AutoScripts({ trongKhuon = false }: { trongKhuon?: boole
               </div>
 
               {/* Block 6: ÁP DỤNG CHO BÀI NÀO */}
-              <div className="khung-muc mau-hong">
+              <div className="khung-muc mau-cam">
                 <h3 className="tieu-de-muc dau-muc">ÁP DỤNG CHO BÀI NÀO</h3>
                 <div className="bg-surface-container rounded-xl p-4 border border-outline-variant space-y-4">
                   <label className="flex items-center gap-3 cursor-pointer group">

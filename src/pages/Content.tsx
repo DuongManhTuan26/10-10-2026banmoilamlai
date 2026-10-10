@@ -677,14 +677,16 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
     return dbPosts.filter((post) => post.status === status);
   }, [activeFilter, dbPosts]);
 
+  /* Bảng màu thống nhất: chờ duyệt = cần làm ngay (hồng) · đã lên lịch = thông tin (lam) · đang đăng = màu miền ·
+     đã đăng = ✓ trắng · lỗi = đỏ · nháp = xám. */
   const getStatusColor = (status: PostStatus) => {
     switch (status) {
-      case 'pending_approval': return 'text-yellow-500 bg-yellow-500/20 border-yellow-500/30';
-      case 'scheduled': return 'text-blue-500 bg-blue-500/20 border-blue-500/30';
-      case 'published': return 'text-green-500 bg-green-500/20 border-green-500/30';
-      case 'publishing': return 'text-primary bg-primary/20 border-primary/30';
-      case 'failed': return 'text-error bg-error/20 border-error/30';
-      default: return 'text-gray-400 bg-gray-500/20 border-gray-500/30';
+      case 'pending_approval': return 'text-gap bg-gap/15 border-gap/40';
+      case 'scheduled': return 'text-thong-tin bg-thong-tin/15 border-thong-tin/40';
+      case 'published': return 'text-on-surface bg-white/10 border-white/25';
+      case 'publishing': return 'text-primary bg-primary/15 border-primary/40';
+      case 'failed': return 'text-loi bg-loi/15 border-loi/40';
+      default: return 'text-on-surface-variant bg-white/5 border-white/15';
     }
   };
 
@@ -789,31 +791,31 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
 
       {/* Row 2: Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">CHỜ DUYỆT</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{activeCounts.pending}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{activeCounts.pending}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">Cần bạn xem qua</p>
           </div>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐÃ LÊN LỊCH</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{activeCounts.scheduled}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{activeCounts.scheduled}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">Sẽ tự đăng đúng giờ</p>
           </div>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐÃ ĐĂNG TUẦN NÀY</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{publishedThisWeek}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{publishedThisWeek}</span>
             </div>
           </div>
           {activeCounts.published > publishedThisWeek && (
@@ -824,11 +826,11 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
           )}
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">TƯƠNG TÁC TRUNG BÌNH</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{avgEngagement}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{avgEngagement}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">
               {activeCounts.published > 0 ? 'Lượt trên mỗi bài' : 'Chưa có bài nào được đăng'}
@@ -858,18 +860,14 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
         })}
       </div>
 
-      {/* Row 4: Posts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {/*
+        DANH SÁCH BÀI GỌN (rà soát lượt 2, §3): mỗi bài một hàng — ảnh thật bên trái, nội dung giữa, thao tác bên phải.
+        Bản cũ là lưới 3 cột thẻ cao, vài bài đã chiếm cả màn hình. Trên điện thoại hàng tự xếp dọc.
+        Nút thao tác chỉ ở một chỗ (bản cũ có thêm bộ ✓ ⏱ 🗑 ở đầu thẻ — T4).
+      */}
+      <div className="flex flex-col gap-3">
         {filteredPosts.map(post => (
-          <div key={post.id} className="bg-surface-container border border-outline-variant rounded-2xl overflow-hidden flex flex-col group hover:border-primary/30 transition-colors shadow-sm h-full">
-            {/* Top Bar */}
-            <div className="p-4 flex items-center justify-between border-b border-outline-variant/50">
-              <span className={clsx("px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wider border", getStatusColor(post.status))}>
-                {/* Bài chờ video AI xong rồi máy chủ tự đăng — duyệt tay lúc này sẽ đăng thiếu video nên ẩn nút duyệt. */}
-                {post.cho_video_id ? 'ĐANG TẠO VIDEO AI · XONG TỰ ĐĂNG' : POST_STATUS_LABELS[post.status].toUpperCase()}
-              </span>
-              {/* Nút thao tác chỉ ở chân thẻ — bản cũ có thêm bộ ✓ ⏱ 🗑 ở đầu thẻ làm đúng việc đó (rà soát lượt 2, T4). */}
-            </div>
+          <div key={post.id} className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden flex flex-col md:flex-row hover:border-primary/40 transition-colors">
 
             {/*
               Ảnh / video THẬT của bài (post.media). Bản cũ đọc `post.platforms === 'has_image'` — trường không tồn tại,
@@ -881,7 +879,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
               if (!m) return null;
               const an = (e: React.SyntheticEvent<HTMLElement>) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; };
               return (
-                <div className="h-[180px] flex-none w-full relative overflow-hidden bg-surface-variant">
+                <div className="h-[160px] md:h-auto md:w-40 flex-none w-full relative overflow-hidden bg-surface-variant">
                   {m.type === 'video'
                     ? <video src={m.url} muted preload="metadata" className="w-full h-full object-cover" onError={an} />
                     : <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" onError={an} />}
@@ -895,12 +893,16 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
             })()}
 
             {/* Content */}
-            <div className="p-5 flex-1 flex flex-col">
-              <p className="text-sm text-on-surface leading-relaxed line-clamp-4 mb-4">
+            <div className="p-4 flex-1 min-w-0 flex flex-col gap-2">
+              <span className={clsx("self-start px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wider border", getStatusColor(post.status))}>
+                {/* Bài chờ video AI xong rồi máy chủ tự đăng — duyệt tay lúc này sẽ đăng thiếu video nên ẩn nút duyệt. */}
+                {post.cho_video_id ? 'ĐANG TẠO VIDEO AI · XONG TỰ ĐĂNG' : POST_STATUS_LABELS[post.status].toUpperCase()}
+              </span>
+              <p className="text-sm text-on-surface leading-relaxed line-clamp-2">
                 {post.content}
               </p>
               
-              <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant">
                   <span className="material-symbols-outlined text-[14px] text-primary/80">{post.ai_generated ? 'auto_awesome' : 'edit'}</span>
                   {/* Ai viết theo cờ thật của bài (posts.ai_generated) — bản cũ ghi "AI viết" cho mọi bài, kể cả bài người viết. */}
@@ -913,7 +915,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
                 </div>
 
                 {post.status === 'published' && post.stats && (
-                  <div className="flex items-center gap-4 text-xs font-bold text-on-surface pt-3 border-t border-outline-variant/50">
+                  <div className="flex items-center gap-4 text-xs font-bold text-on-surface">
                     <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px] text-primary">thumb_up</span> {post.stats.likes ?? 0}</span>
                     <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px] text-primary">chat_bubble</span> {post.stats.comments ?? 0}</span>
                     <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px] text-primary">share</span> {post.stats.shares ?? 0}</span>
@@ -923,7 +925,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
             </div>
 
             {/* Footer Buttons */}
-            <div className="p-4 bg-surface-container border-t border-outline-variant/50 flex gap-2 shrink-0 mt-auto">
+            <div className="p-4 border-t md:border-t-0 md:border-l border-outline-variant/50 flex flex-wrap gap-2 shrink-0 md:w-80 md:content-center">
               {post.status === 'pending_approval' && (
                 <>
                   {/* Bài chờ video AI xong rồi máy chủ tự đăng — duyệt tay lúc này sẽ đăng thiếu video nên ẩn nút duyệt. */}
@@ -1305,7 +1307,7 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
 
               {/* Block 4: ĐĂNG BÀI NÀY LÚC NÀO */}
               {baiDangSua?.status !== 'published' && (
-              <div className="khung-muc mau-luc">
+              <div className="khung-muc mau-cam">
                 {/*
                   Chỉ cho BÀI ĐANG SOẠN (đăng ngay / hẹn một lần) — khác lịch "Tự động hoá" (AI tự viết bài mới theo
                   lịch lặp hằng tuần). Chủ dự án 03/10/2026 thấy hai chỗ cùng tên tưởng là trùng → đặt tên rõ.

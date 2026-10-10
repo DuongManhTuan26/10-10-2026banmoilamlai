@@ -112,7 +112,7 @@ export function BanHangAi() {
 /** Chỉ đạo AI điều hành đang gửi cho MỘT AI nhân viên — hiện ở thẻ Hướng dẫn AI của AI đó (gỡ được). */
 function KhungChiDao({ ai }: { ai: 'content' | 'ads' | 'sales' }) {
   return (
-    <div className="khung-muc mau-tim">
+    <div className="khung-muc mau-xanh">
       <h3 className="tieu-de-muc dau-muc">Chỉ đạo từ ④ AI Điều hành</h3>
       <SoChiDao ai={ai} />
     </div>
@@ -129,7 +129,7 @@ export function DieuHanhAi() {
         'ket-qua': <KetQuaAi ai="analytics" them={<Analytics trongKhuon />} />,
         'dang-lam': nao ? (
           <div className="space-y-6">
-            <div className="khung-muc mau-tim">
+            <div className="khung-muc mau-lam">
               <h3 className="tieu-de-muc dau-muc">Chỉ đạo đang gửi cho 3 AI nhân viên</h3>
               <div key={lanTai}><SoChiDao choThem /></div>
             </div>
@@ -143,7 +143,7 @@ export function DieuHanhAi() {
           <HuongDanAi
             ai="analytics"
             them={
-              <div className="khung-muc mau-xanh">
+              <div className="khung-muc mau-lam">
                 <h3 className="tieu-de-muc dau-muc">Lịch điều hành hằng ngày</h3>
                 <LichDieuHanhForm />
               </div>
@@ -165,13 +165,14 @@ function tinhTrang(du: SucKhoeTrang | null, khau: ChiSoSucKhoe['khau'] | null) {
   if (!du) return null;
   const chiSo = khau ? du.chiSo.filter((c) => c.khau === khau) : du.chiSo;
   const suCo = khau ? du.suCo.filter((s) => s.khau === khau) : du.suCo;
-  if (suCo.length) return { chu: `${suCo.length} sự cố`, mau: 'text-orange-400 bg-orange-400/10 border-orange-400/40' };
+  // Bảng màu B: sự cố = cảnh báo (cam) · tụt = đỏ · tốt = ✓ chữ trắng (không dùng lục — trùng màu miền ③).
+  if (suCo.length) return { chu: `${suCo.length} sự cố`, mau: 'text-canh-bao bg-canh-bao/10 border-canh-bao/40' };
   const tut = chiSo.filter((c) => c.muc === 'tut').length;
-  if (tut) return { chu: `${tut} chỉ số tụt`, mau: 'text-red-400 bg-red-500/10 border-red-500/40' };
+  if (tut) return { chu: `${tut} chỉ số tụt`, mau: 'text-loi bg-loi/10 border-loi/40' };
   const manh = chiSo.filter((c) => c.muc === 'dang_manh').length;
-  if (manh) return { chu: `${manh} chỉ số đang mạnh`, mau: 'text-green-400 bg-green-500/10 border-green-500/40' };
+  if (manh) return { chu: `✓ ${manh} chỉ số đang mạnh`, mau: 'text-on-surface bg-white/5 border-white/25' };
   const du2 = chiSo.filter((c) => MUC_TOT[c.muc] > 0).length;
-  if (du2) return { chu: 'Ổn', mau: 'text-green-400 bg-green-500/10 border-green-500/40' };
+  if (du2) return { chu: '✓ Ổn', mau: 'text-on-surface bg-white/5 border-white/25' };
   return { chu: 'Chưa đủ dữ liệu', mau: 'text-on-surface-variant bg-surface-container-highest border-outline-variant' };
 }
 
@@ -196,7 +197,7 @@ export function TongQuanKhoiNao() {
       <div className="p-8 max-w-3xl">
         <h1 className="text-2xl font-bold text-on-surface mb-2">Chưa có trang bán hàng nào</h1>
         <p className="text-on-surface-variant">
-          {dsNao.length === 0 ? 'Mỗi trang bán hàng có một khối não 4 AI. Lập trang (hoặc nối Fanpage) để bắt đầu.' : 'Chọn một trang ở đầu thanh menu.'}
+          {dsNao.length === 0 ? 'Mỗi trang bán hàng có một khối não 4 AI. Lập trang (hoặc nối Fanpage) để bắt đầu.' : 'Chọn một trang ở mục Trang & kênh.'}
         </p>
       </div>
     );
@@ -230,7 +231,8 @@ export function TongQuanKhoiNao() {
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-on-surface tracking-tight">Khối não của trang {nao.ten}</h1>
+        {/* Tên trang đã ở thanh trên cùng ("Khối não: …") — tiêu đề phụ, không lặp tiêu đề thứ hai. */}
+        <h2 className="text-xl font-bold text-on-surface">4 AI của trang {nao.ten}</h2>
         <p className="text-on-surface-variant text-sm mt-1">
           4 AI cố định, liền mạch: 3 AI nhân viên làm việc theo dòng khách hàng; AI điều hành chấm hiệu suất mỗi ngày, giữ cái
           tốt, tìm nguyên nhân cái chưa tốt và chỉ đạo sửa — vòng lặp tự hoàn thiện.
@@ -260,7 +262,7 @@ export function TongQuanKhoiNao() {
       <div className="max-w-3xl mx-auto">{o(dieuHanh)}</div>
 
       {du && du.uuTien.length > 0 && (
-        <div className="mt-6 khung-muc mau-tim">
+        <div className="mt-6 khung-muc mau-hong">
           <h3 className="tieu-de-muc dau-muc">Việc AI điều hành cần xử lý trước</h3>
           <ol className="list-decimal pl-5 text-sm space-y-1">
             {du.uuTien.map((m) => {

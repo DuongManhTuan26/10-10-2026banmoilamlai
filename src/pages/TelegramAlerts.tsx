@@ -247,12 +247,12 @@ export default function TelegramAlerts() {
   const dieuHanh = aiTheoMa('analytics');
 
   return (
-    <main className="flex-1   p-8 space-y-8  ">
+    <main className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-8">
       
       {/* HEADER */}
       <div>
+        {/* Tên trang đã ở thanh trên cùng ("Báo cáo Telegram") — không lặp tiêu đề thứ hai, khác tên (nhất quán toàn hệ thống). */}
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-3xl font-black text-on-surface tracking-tight">Cảnh báo Telegram</h1>
           <span className={clsx(
             "font-mono text-[10px] font-bold tracking-wider px-2 py-0.5 rounded uppercase border",
             isConnected
@@ -267,7 +267,7 @@ export default function TelegramAlerts() {
         <div className="text-sm text-error bg-error/10 border border-error/30 rounded-xl px-4 py-3">{errorMessage}</div>
       )}
       {notice && (
-        <div className="text-sm text-green-400 bg-green-400/10 border border-green-400/30 rounded-xl px-4 py-3">{notice}</div>
+        <div className="text-sm text-on-surface border border-white/25 rounded-xl px-4 py-3">✓ {notice}</div>
       )}
 
       {/* HÀNG 1: THẺ TRẠNG THÁI KẾT NỐI */}
@@ -282,7 +282,7 @@ export default function TelegramAlerts() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-xl font-bold text-on-surface">Đã kết nối</h2>
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                <span className="material-symbols-outlined text-[20px] text-on-surface">check_circle</span>
               </div>
               {/* Bot chung: hiện tên người đã bấm Start — dễ hiểu hơn dãy số.
                   Bot riêng: vẫn hiện Chat ID vì đó là thứ họ tự nhập. */}

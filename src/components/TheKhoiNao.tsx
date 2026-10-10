@@ -118,7 +118,7 @@ export function NhatKyAi({ ai }: { ai: MaAi }) {
         </div>
       )}
       {(ai === 'content' || ai === 'analytics') && (
-        <div className={clsx('khung-muc', motAi.mau)}>
+        <div className={clsx('khung-muc', 'mau-xam')}>
           <h3 className="tieu-de-muc dau-muc">{ai === 'content' ? 'Việc AI đã tự làm theo lịch' : 'Các lần AI điều hành chẩn đoán'}</h3>
           {du.viec.length === 0 ? (
             <p className="text-sm text-on-surface-variant">Chưa có việc nào.</p>

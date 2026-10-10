@@ -456,7 +456,8 @@ export default function QuanLy({ user }: { user: User | null }) {
             className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg bg-primary text-on-primary font-bold text-xs disabled:opacity-40 whitespace-nowrap"
           >
             {/* Điện thoại: chỉ biểu tượng cho tên đủ chỗ. */}
-            <span className="material-symbols-outlined text-[18px] sm:hidden">login</span>
+            {/* Bọc ngoài: `sm:hidden` gắn thẳng lên biểu tượng không có tác dụng (CSS phông biểu tượng nằm ngoài @layer). */}
+            <span className="sm:hidden inline-flex"><span className="material-symbols-outlined text-[18px]">login</span></span>
             <span className="hidden sm:inline">Mở trang</span>
           </button>
         )}
@@ -596,13 +597,13 @@ export default function QuanLy({ user }: { user: User | null }) {
   const mkTaoChuaDu = Boolean(matKhauMoi.trim()) && matKhauMoi.trim().length < 8;
 
   return (
-    <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+    <main className="p-4 md:p-8 max-w-[1600px] mx-auto w-full">
       <BangLoi noiDung={loi} onDong={() => setLoi('')} className="mb-6" />
 
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight mb-2">Quản lý tài khoản</h1>
-          <p className="font-body-lg text-on-surface-variant">
+          {/* Tên trang ở thanh trên cùng — không lặp tiêu đề thứ hai. */}
+          <p className="text-sm text-on-surface-variant">
             {ds.length} tài khoản{soKhoa > 0 ? `, ${soKhoa} đang bị khoá` : ''}
           </p>
         </div>

@@ -331,7 +331,7 @@ export function XuongAi({
 
   return (
     // @container: hai cột ảnh / video đứng song song theo bề rộng CỦA XƯỞNG (cửa sổ chia đôi thì Xưởng hẹp hơn màn hình).
-    <div className="khung-muc mau-hong @container">
+    <div className="khung-muc mau-xam @container">
       <h3 className="tieu-de-muc dau-muc">XƯỞNG AI — ẢNH &amp; VIDEO</h3>
       {loi && <div className="mb-3 text-xs text-error bg-error/10 border border-error/30 rounded-lg px-3 py-2">{loi}</div>}
 

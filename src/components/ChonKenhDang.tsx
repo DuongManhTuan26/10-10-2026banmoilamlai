@@ -64,7 +64,7 @@ export default function ChonKenhDang({
   };
 
   return (
-    <div className="khung-muc mau-xanh">
+    <div className="khung-muc mau-xam">
       <h3 className="tieu-de-muc dau-muc">
         {nhan}
       </h3>
@@ -141,26 +141,24 @@ export default function ChonKenhDang({
               </p>
             )}
 
+            {/*
+              Giới hạn ký tự — MỘT dòng; lý do và ghi chú chỉ hiện khi bấm (rà soát lượt 2, §3: bản cũ 6 dòng chữ cho một
+              con số). Nội dung giữ nguyên.
+            */}
             {kenhSeDang.length > 0 && gioiHan && (
-              <div className="bg-surface rounded-lg border border-outline-variant p-3">
-                <p className="text-sm font-bold text-on-surface flex items-center gap-2">
+              <details className="rounded-lg border border-outline-variant px-3 py-2 text-xs text-on-surface-variant">
+                <summary className="cursor-pointer text-sm font-bold text-on-surface flex items-center gap-2">
                   <span className="material-symbols-outlined text-[18px] text-primary">rule</span>
-                  Giới hạn bài viết: {gioiHan.soKyTu.toLocaleString('vi-VN')} ký tự
+                  Tối đa {gioiHan.soKyTu.toLocaleString('vi-VN')} ký tự (theo {gioiHan.ten})
+                </summary>
+                <p className="mt-1.5 leading-relaxed">
+                  Áp dụng theo <b className="text-on-surface">{gioiHan.ten}</b>, kênh có giới hạn thấp nhất trong các kênh bạn đã chọn. {gioiHan.lyDo}
                 </p>
-                <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
-                  Áp dụng theo <b className="text-on-surface">{gioiHan.ten}</b>, kênh có giới hạn
-                  thấp nhất trong các kênh bạn đã chọn. {gioiHan.lyDo}
+                <p className="mt-1.5 leading-relaxed">
+                  Bài được gửi đồng thời tới tất cả kênh đã chọn. Nếu một kênh không nhận bài, các kênh còn lại cũng không đăng được.
+                  {!gioiHan.daKiemChung && ' Số liệu tham khảo từ tài liệu của nền tảng, có thể thay đổi.'}
                 </p>
-                <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
-                  Bài được gửi đồng thời tới tất cả kênh đã chọn. Nếu một kênh không nhận bài,
-                  các kênh còn lại cũng không đăng được.
-                </p>
-                {!gioiHan.daKiemChung && (
-                  <p className="text-xs text-on-surface-variant mt-1.5">
-                    Số liệu tham khảo từ tài liệu của nền tảng, có thể thay đổi.
-                  </p>
-                )}
-              </div>
+              </details>
             )}
           </>
         )}

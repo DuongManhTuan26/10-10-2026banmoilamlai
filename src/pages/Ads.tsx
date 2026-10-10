@@ -723,11 +723,11 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
 
       {/* Row 1: Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">TỔNG CHI TIÊU</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">
+              <span className="text-2xl font-bold text-on-surface tabular-nums">
                 {hienSo(soLieu?.daChi, (n) => formatCurrency(n))}
               </span>
             </div>
@@ -735,11 +735,11 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
           <p className="text-xs text-on-surface-variant mt-auto font-medium">{ghiChuKy}</p>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">LƯỢT TIẾP CẬN</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">
+              <span className="text-2xl font-bold text-on-surface tabular-nums">
                 {hienSo(soLieu?.tiepCan, (n) => compact(n))}
               </span>
             </div>
@@ -747,11 +747,11 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
           <p className="text-xs text-on-surface-variant mt-auto font-medium">Số người khác nhau đã thấy quảng cáo</p>
         </div>
 
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">BÌNH LUẬN THU ĐƯỢC</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">
+              <span className="text-2xl font-bold text-on-surface tabular-nums">
                 {hienSo(soLieu?.binhLuan, (n) => n.toLocaleString('vi-VN'))}
               </span>
             </div>
@@ -772,7 +772,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                 * Đơn mang mã quảng cáo (orders.origin_ad_id — khách bấm quảng cáo rồi nhắn tin, Meta gửi kèm mã quảng
                 * cáo), cùng kỳ với các ô bên cạnh. Bản trước ghi "Chưa đo được" từ khi chưa có mối nối này.
                 */}
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">
+              <span className="text-2xl font-bold text-on-surface tabular-nums">
                 {donQuangCao ? donQuangCao.so.toLocaleString('vi-VN') : '—'}
               </span>
             </div>

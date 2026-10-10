@@ -100,7 +100,8 @@ export default function BangTrangBanHang() {
                 )}
                 <div className={clsx('flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 py-2.5', dangMo && 'bg-surface-container-high -mx-2 px-2 rounded-lg')}>
                   <span className="material-symbols-outlined text-[20px] text-on-surface-variant shrink-0">storefront</span>
-                  <span className="min-w-0 flex-1">
+                  {/* Điện thoại: tên trang một dòng riêng, không bị cắt; màn rộng: cùng hàng. */}
+                  <span className="min-w-0 flex-1 basis-[calc(100%-2.5rem)] sm:basis-auto">
                     <span className="block text-sm font-bold text-on-surface truncate">{n.ten}</span>
                   </span>
                   <span className="flex flex-wrap gap-1 shrink-0">

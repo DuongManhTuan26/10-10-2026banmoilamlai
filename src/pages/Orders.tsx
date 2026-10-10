@@ -327,24 +327,28 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
     URL.revokeObjectURL(url);
   };
 
+  /*
+   * Màu trạng thái theo bảng màu đã thống nhất (B + miền): chờ xác nhận = cần làm ngay (hồng) · đã xác nhận = thông tin
+   * (lam) · đang giao = màu miền ③ Bán hàng · hoàn thành = ✓ trắng · đã huỷ = đỏ.
+   */
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Chờ xác nhận': return 'bg-yellow-500';
-      case 'Đã xác nhận': return 'bg-blue-500';
-      case 'Đang giao': return 'bg-purple-500';
-      case 'Hoàn thành': return 'bg-green-500';
-      case 'Đã hủy': return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 'Chờ xác nhận': return 'bg-gap';
+      case 'Đã xác nhận': return 'bg-thong-tin';
+      case 'Đang giao': return 'bg-primary';
+      case 'Hoàn thành': return 'bg-on-surface';
+      case 'Đã hủy': return 'bg-loi';
+      default: return 'bg-on-surface-variant';
     }
   };
 
   const getStatusBgColor = (status: string) => {
     switch (status) {
-      case 'Chờ xác nhận': return 'bg-yellow-500/20 text-yellow-500';
-      case 'Đã xác nhận': return 'bg-blue-500/20 text-blue-500';
-      case 'Đang giao': return 'bg-purple-500/20 text-purple-400';
-      case 'Hoàn thành': return 'bg-green-500/20 text-green-400';
-      case 'Đã hủy': return 'bg-red-500/20 text-red-500';
+      case 'Chờ xác nhận': return 'bg-gap/15 text-gap';
+      case 'Đã xác nhận': return 'bg-thong-tin/15 text-thong-tin';
+      case 'Đang giao': return 'bg-primary/15 text-primary';
+      case 'Hoàn thành': return 'bg-white/10 text-on-surface';
+      case 'Đã hủy': return 'bg-loi/15 text-loi';
       default: return 'bg-surface-variant text-on-surface-variant';
     }
   };
@@ -405,11 +409,11 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Card 1 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐƠN HÔM NAY</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{summary.today_count}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{summary.today_count}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">{`Tổng ${formatCurrency(summary.today_revenue)}`}</p>
           </div>
@@ -422,11 +426,11 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         </div>
 
         {/* Card 2 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">CHỜ XÁC NHẬN</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{summary.pending}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{summary.pending}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">Cần bạn gọi lại cho khách</p>
           </div>
@@ -439,22 +443,22 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         </div>
 
         {/* Card 3 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">ĐANG GIAO</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-3xl font-bold text-on-surface">{summary.shipping}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{summary.shipping}</span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">Đang trên đường tới khách</p>
           </div>
         </div>
 
         {/* Card 4 */}
-        <div className="bg-surface-container border border-outline-variant rounded-2xl p-5 relative overflow-hidden flex flex-col justify-between group hover:border-primary/50 transition-colors">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-4 relative overflow-hidden flex flex-col justify-between gap-2">
           <div>
             <h3 className="tieu-de-muc mb-1">DOANH THU THÁNG</h3>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline-sm text-2xl font-bold text-on-surface">{formatCurrency(summary.month_revenue)}</span>
+              <span className="text-2xl font-bold text-on-surface tabular-nums">{formatCurrency(summary.month_revenue)}</span>
             </div>
           </div>
           {soSanhThangTruoc && (
@@ -730,7 +734,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
             <div className="space-y-8">
               
               {/* Block 1: Customer Info */}
-              <div className="khung-muc mau-xanh">
+              <div className="khung-muc mau-lam">
                 <h3 className="tieu-de-muc dau-muc">THÔNG TIN KHÁCH HÀNG</h3>
                 <div className="bg-surface-container rounded-xl p-4 border border-outline-variant space-y-4">
                   <div className="flex justify-between items-start gap-4">
@@ -762,7 +766,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
               </div>
 
               {/* Block 2: Products */}
-              <div className="khung-muc mau-tim">
+              <div className="khung-muc mau-luc">
                 <h3 className="tieu-de-muc dau-muc">SẢN PHẨM</h3>
                 <div className="bg-surface-container rounded-xl border border-outline-variant overflow-hidden">
                   <table className="w-full text-left border-collapse">
@@ -814,7 +818,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
               </div>
 
               {/* Block 3: Timeline */}
-              <div className="khung-muc mau-cam">
+              <div className="khung-muc mau-xam">
                 <h3 className="tieu-de-muc dau-muc">DÒNG THỜI GIAN</h3>
                 <div className="bg-surface-container rounded-xl p-5 border border-outline-variant">
                   <div className="relative border-l-2 border-outline-variant/60 ml-2 space-y-6">

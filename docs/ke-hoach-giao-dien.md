@@ -100,3 +100,16 @@ lấy từ bảng B (lam · hồng · cam · xám) + số thứ tự, bước đ
 | **2 — Hệ màu & thứ bậc** | Đưa bảng màu A/B/C thành biến dùng chung; áp cho menu, 4 khuôn AI, 15 hộp thoại, mọi nút / chip / thẻ số / biểu đồ | §0, §4 |
 | **3 — Bỏ trùng lặp, gọn đầu trang** | T1–T11; Trang & kênh dạng bảng một dòng mỗi trang (tìm, lọc, phân trang); đầu mỗi AI còn một hàng | T1–T11, §3 |
 | **4 — Mật độ & nhất quán** | Một bộ cỡ chữ / khoảng cách / bo góc; thẻ số liệu gọn; thẻ bài đăng dạng danh sách gọn có ảnh thật; kiểm điện thoại 375px và màn 1440px | §3 |
+
+## 6. TRẠNG THÁI (11/10/2026) — đã làm xong cả 4 giai đoạn
+
+| Giai đoạn | Đã làm |
+|---|---|
+| 1 | L1–L14 (xem §1). |
+| 2 | Màu theo miền (index.css `.mien-*`, đặt theo đường dẫn ở App.tsx; nguồn src/lib/bon-ai.ts): ④ + Tổng quan xanh ngọc · ② vàng · ③ lục · ① tím · hệ thống trung tính. Màu mức quan trọng: `loi` đỏ · `gap` hồng · `canh-bao` cam · `thong-tin` lam; ổn = ✓ trắng. Gỡ quầng sáng xanh ngọc ghi cứng. 4 bước có số, mô tả, màu lam · hồng · cam · xám, bước mở tô đặc. Khung con: màu miền chỉ cho AI của nó (vd. "Chỉ đạo từ ④" xanh ngọc ở mọi trang). Trạng thái đơn / bài / hội thoại theo bảng màu. |
+| 3 | T1 bỏ ô chọn trang ở menu → mục "Trang & kênh" ngay dưới logo + bảng trang (tìm, lọc, gom tài khoản, 25 dòng/trang), thanh trên hiện "Khối não: ‹trang›". T2 đầu AI một hàng. T3 Hộp thư: lọc kênh chỉ khi ≥2 kênh (mặc định tất cả), một nút "Tôi tiếp quản / Trả cho AI", bỏ nút trùng. T4 thẻ bài một bộ nút. T5 giữ hai cài đặt (khác phạm vi) nhưng ghi rõ "Bài bạn tự soạn". T6 bỏ lưới 20 thẻ kênh, kênh dạng dòng bấm mở quyền + thao tác. T7 nút chọn bên đổi "Ảnh / Video". T8 thẻ con thành ô chọn hai mục (mỗi mục lưu riêng). T9 Quản lý: thay Sức khoẻ + AI điều hành bằng nút mở ④ (giữ Chuỗi 4 khâu — chưa có trong khối não). T10 bỏ nhãn trang trí + chấm trực tuyến giả. T11 An toàn tài khoản + Quy định Facebook chuyển sang ③ › Kết quả. |
+| 4 | Một mẫu trang (lề, bề rộng, không lặp tiêu đề thứ hai); thẻ số gọn (24px, bỏ cao cố định 140px); bài đăng dạng danh sách có ảnh thật; giới hạn ký tự một dòng (bấm mở chi tiết). Đo tự động 18 màn × 1440px / 375px: không tràn ngang; 21 màn mở không đổ. |
+
+Khoá chống lùi: nhóm "giao diện lượt 2" trong `npm run kiem-tra` (1128 điểm, đã thử ngược trên mã cũ).
+Chưa xem bằng mắt được (cần Meta thật): biểu đồ quảng cáo có số, sau khi tạo quảng cáo.
+

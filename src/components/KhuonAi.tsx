@@ -41,7 +41,7 @@ export default function KhuonAi({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
-            <h2 className="text-xl font-bold text-on-surface">{motAi.chucNang}</h2>
+            <h2 className="text-base md:text-xl font-bold text-on-surface">{motAi.chucNang}</h2>
             {phuDe}
           </div>
         </div>
@@ -73,7 +73,9 @@ export default function KhuonAi({
               </span>
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 text-sm font-bold whitespace-nowrap">
-                  <span className="material-symbols-outlined text-[18px]">{t.bieuTuong}</span>
+                  {/* Biểu tượng ẩn trên điện thoại để chữ bước không bị cắt (375px). */}
+                  {/* Bọc ngoài: lớp `hidden` (trong @layer) không thắng được CSS phông biểu tượng (ngoài layer) nếu gắn thẳng. */}
+                  <span className="hidden sm:inline-flex"><span className="material-symbols-outlined text-[18px]">{t.bieuTuong}</span></span>
                   {t.ten}
                 </span>
                 <span className={clsx('hidden md:block text-xs truncate', mo ? 'opacity-80' : 'text-on-surface-variant')}>{t.moTa}</span>

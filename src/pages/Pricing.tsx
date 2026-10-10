@@ -74,7 +74,7 @@ export default function Pricing() {
   };
 
   return (
-    <div className="flex-1   p-gutter relative">
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full relative">
       {errorMessage && (
         <div className="mb-md text-sm text-error bg-error/10 border border-error/30 rounded-xl px-4 py-3 max-w-5xl mx-auto">
           {errorMessage}
@@ -84,28 +84,28 @@ export default function Pricing() {
       {/* Header */}
       <div className="mb-lg">
         <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase mb-3 inline-block">{currentPlan.name.toUpperCase()}</span>
-        <p className="font-body-lg text-on-surface-variant max-w-2xl mt-1">Quản lý gói dịch vụ và theo dõi an toàn tài khoản</p>
+        <p className="text-base text-on-surface-variant max-w-2xl mt-1">Gói đang dùng, mức dùng trong tháng và các gói có thể đổi. An toàn tài khoản nằm ở ③ AI Bán hàng › Kết quả.</p>
       </div>
 
       <div className="max-w-5xl mx-auto pb-xl">
         {/* HÀNG 1 — thẻ ngang rộng hết chiều ngang, viền phát sáng */}
-        <div className="glass-card ai-border rounded-xl p-md grid grid-cols-1 md:grid-cols-10 gap-md items-start mb-md">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-md grid grid-cols-1 md:grid-cols-10 gap-md items-start mb-md">
           {/* Left */}
           <div className="flex flex-col md:col-span-4">
             <span className="font-label-sm text-primary tracking-widest uppercase mb-1">GÓI ĐANG DÙNG</span>
-            <h3 className="font-display-lg text-on-surface">{currentPlan.name}</h3>
-            <p className="font-body-lg text-primary font-bold">{currentPlan.price.replace('/tháng', ' mỗi tháng')}</p>
+            <h3 className="text-3xl font-bold text-on-surface">{currentPlan.name}</h3>
+            <p className="text-base text-primary font-bold">{currentPlan.price.replace('/tháng', ' mỗi tháng')}</p>
             <p className="font-body-md text-on-surface-variant mt-2">{plan === 'trial' ? 'Đang dùng thử' : 'Gia hạn tự động hằng tháng'}</p>
           </div>
           {/* Middle */}
           <div className="flex flex-col min-w-[220px] md:col-span-3">
             <span className="font-label-sm text-on-surface-variant tracking-widest uppercase mb-2 whitespace-nowrap">SỐ KÊNH ĐÃ KẾT NỐI</span>
             <div className="flex items-baseline gap-2 whitespace-nowrap">
-              <span className="font-display-lg text-primary">{usedChannels}</span>
+              <span className="text-3xl font-bold text-primary">{usedChannels}</span>
               {coHanMuc && (
                 <>
-                  <span className="font-display-lg text-on-surface-variant">/</span>
-                  <span className="font-display-lg text-on-surface-variant">{maxChannels}</span>
+                  <span className="text-3xl font-bold text-on-surface-variant">/</span>
+                  <span className="text-3xl font-bold text-on-surface-variant">{maxChannels}</span>
                 </>
               )}
             </div>
@@ -147,7 +147,7 @@ export default function Pricing() {
           ].map((o) => (
             <div key={o.nhan} className="glass-card rounded-xl p-md">
               <span className="font-label-sm text-on-surface-variant tracking-widest uppercase">{o.nhan}</span>
-              <p className="font-display-lg text-on-surface mt-1">{o.so.toLocaleString('vi-VN')}</p>
+              <p className="text-3xl font-bold text-on-surface mt-1">{o.so.toLocaleString('vi-VN')}</p>
               <p className="font-body-md text-on-surface-variant">trong tháng này, không tính thêm tiền</p>
             </div>
           ))}
@@ -167,8 +167,8 @@ export default function Pricing() {
               {plan.isCurrent && (
                 <div className="absolute top-0 right-0 bg-primary text-on-primary font-label-sm text-[10px] px-3 py-1 rounded-bl-lg font-bold">ĐANG DÙNG</div>
               )}
-              <h4 className="font-headline-lg text-on-surface">{plan.name}</h4>
-              <p className="font-body-lg text-primary font-bold mt-1">{plan.price}</p>
+              <h4 className="text-xl font-bold text-on-surface">{plan.name}</h4>
+              <p className="text-base text-primary font-bold mt-1">{plan.price}</p>
               <div className="flex flex-col gap-3 mt-md mb-lg flex-1">
                 {plan.features.map((feature, fidx) => (
                   <div key={fidx} className={`flex items-start gap-2 ${!feature.included ? 'opacity-40' : ''}`}>

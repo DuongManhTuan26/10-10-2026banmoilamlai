@@ -320,7 +320,7 @@ export default function VideoAiPanel({
   );
 
   return (
-    <div className={nhung ? '' : 'khung-muc mau-xanh'}>
+    <div className={nhung ? '' : 'khung-muc mau-tim'}>
       {!nhung && (
         <div className="flex items-center justify-between gap-3 dau-muc">
           <h3 className="tieu-de-muc">AI TẠO VIDEO</h3>
