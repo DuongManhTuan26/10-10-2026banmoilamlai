@@ -1467,6 +1467,8 @@ export const api = {
           campaigns: Array<Record<string, unknown>>;
           insights: Record<string, unknown> | null;
           audiences: Array<Record<string, unknown>>;
+          /** Đơn chốt có mã quảng cáo trong cùng kỳ (server/routes/ads.ts donTuQuangCao); ngay = YYYY-MM-DD giờ VN. */
+          donQuangCao: { so: number; doanhThu: number; theoNgay: { ngay: string; so: number }[] };
           /** Mọi tài khoản quảng cáo kênh này vào được, để chủ shop chọn. */
           tatCaTaiKhoan?: Array<{
             id: string; name: string; currency: string; accountStatus: number;

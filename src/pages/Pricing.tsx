@@ -123,6 +123,17 @@ export default function Pricing() {
         : `Đang vượt ${-conLaiKenh} kênh so với gói`;
 
   const safetyStatus = safety?.status ?? 'safe';
+  /*
+   * Lý do THẬT của trạng thái, đúng ngưỡng máy chủ dùng (server/routes/settings.ts: lỗi ≥3% / ≥10%, tốc độ ≥12 / ≥20
+   * tin mỗi phút). Bản cũ ghi "tỷ lệ khách chặn đang tăng" — chỉ số Meta không cung cấp, hệ thống không đo được; và
+   * "AI đã tự tạm dừng" ở mức nguy hiểm dù chưa chắc có kênh nào bị dừng (kênh bị dừng hiện riêng ngay bên dưới).
+   */
+  const lyDoAnToan = safety
+    ? [
+        safety.failRate >= 3 && `${safety.failRate}% tin gửi đi bị lỗi trong 30 ngày`,
+        safety.sendRatePerMinute >= 12 && `AI đang gửi ${safety.sendRatePerMinute} tin mỗi phút (giới hạn ${safety.sendRateLimit})`,
+      ].filter(Boolean).join(' · ')
+    : '';
   const facebookRules = PLATFORM_RULES;
 
   /**
@@ -292,7 +303,8 @@ export default function Pricing() {
               <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 flex items-start md:items-center gap-3">
                 <span className="material-symbols-outlined text-[#f59e0b] text-[24px]">warning</span>
                 <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 flex-1">
-                  <p className="font-body-md text-[#f59e0b] font-bold">Cần chú ý — tỷ lệ khách chặn đang tăng</p>
+                  <p className="font-body-md text-[#f59e0b] font-bold">Cần chú ý</p>
+                  {lyDoAnToan && <p className="font-body-md text-on-surface-variant">{lyDoAnToan}</p>}
                 </div>
               </div>
             )}
@@ -300,7 +312,8 @@ export default function Pricing() {
               <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-4 flex items-start md:items-center gap-3">
                 <span className="material-symbols-outlined text-[#ef4444] text-[24px]">gpp_bad</span>
                 <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 flex-1">
-                  <p className="font-body-md text-[#ef4444] font-bold">AI đã tự tạm dừng để bảo vệ tài khoản của bạn</p>
+                  <p className="font-body-md text-[#ef4444] font-bold">Rủi ro cao cho tài khoản</p>
+                  {lyDoAnToan && <p className="font-body-md text-on-surface-variant">{lyDoAnToan}</p>}
                 </div>
               </div>
             )}

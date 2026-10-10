@@ -915,13 +915,28 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
               </div>
             </div>
 
-            {/* Image Placeholder */}
-            {(post.platforms === 'has_image') && (
-              <div className="h-[180px] min-h-[180px] max-h-[180px] flex-none w-full relative overflow-hidden bg-surface-variant flex items-center justify-center">
-                <div className="absolute inset-0 bg-gradient-to-br from-surface-variant to-surface-container-high opacity-50"></div>
-                <span className="material-symbols-outlined text-4xl text-on-surface-variant opacity-20">image</span>
-              </div>
-            )}
+            {/*
+              Ảnh / video THẬT của bài (post.media). Bản cũ đọc `post.platforms === 'has_image'` — trường không tồn tại,
+              nên không bài nào hiện ảnh. Liên kết tệp của kho tạm hết hạn sau 7 ngày (api.ts MediaItem): tải hỏng thì ẩn
+              khung, không để ô ảnh vỡ.
+            */}
+            {(() => {
+              const m = (Array.isArray(post.media) ? post.media : []).find((x) => x.type === 'image' || x.type === 'gif' || x.type === 'video');
+              if (!m) return null;
+              const an = (e: React.SyntheticEvent<HTMLElement>) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; };
+              return (
+                <div className="h-[180px] flex-none w-full relative overflow-hidden bg-surface-variant">
+                  {m.type === 'video'
+                    ? <video src={m.url} muted preload="metadata" className="w-full h-full object-cover" onError={an} />
+                    : <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" onError={an} />}
+                  {post.media.length > 1 && (
+                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[11px] font-bold">
+                      +{post.media.length - 1}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Content */}
             <div className="p-5 flex-1 flex flex-col">
@@ -931,8 +946,9 @@ export default function Content({ trongKhuon = false }: { trongKhuon?: boolean }
               
               <div className="space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant">
-                  <span className="material-symbols-outlined text-[14px] text-primary/80">auto_awesome</span>
-                  {`AI viết lúc ${new Date(post.created_at).toLocaleTimeString('vi-VN')} ngày ${new Date(post.created_at).toLocaleDateString('vi-VN')}`}
+                  <span className="material-symbols-outlined text-[14px] text-primary/80">{post.ai_generated ? 'auto_awesome' : 'edit'}</span>
+                  {/* Ai viết theo cờ thật của bài (posts.ai_generated) — bản cũ ghi "AI viết" cho mọi bài, kể cả bài người viết. */}
+                  {`${post.ai_generated ? 'AI viết' : 'Bạn viết'} lúc ${new Date(post.created_at).toLocaleTimeString('vi-VN')} ngày ${new Date(post.created_at).toLocaleDateString('vi-VN')}`}
                 </div>
                 
                 <div className="flex items-center gap-1.5 text-xs font-bold text-on-surface">

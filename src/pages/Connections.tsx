@@ -1039,7 +1039,8 @@ export default function Connections() {
             <span className="material-symbols-outlined text-[32px] text-on-surface-variant group-hover:text-primary transition-colors">add</span>
           </div>
           <h3 className="text-xl font-bold text-on-surface mb-2 group-hover:text-primary transition-colors">Kết nối thêm kênh</h3>
-          <p className="text-sm font-medium text-on-surface-variant">Gói hiện tại còn 1 lượt kết nối</p>
+          {/* Không có hạn mức kết nối theo gói (xem MOI_LUOT_MOT_TRANG) — bản cũ ghi "Gói hiện tại còn 1 lượt kết nối", số bịa. */}
+          <p className="text-sm font-medium text-on-surface-variant">Fanpage, Instagram, TikTok… cho trang bán hàng này</p>
         </button>
 
       </div>

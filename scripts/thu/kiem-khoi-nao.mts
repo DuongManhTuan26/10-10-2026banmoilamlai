@@ -36,7 +36,10 @@ r = await json(await A("/inbox/conversations/hc-k-t2-0", T1)); kiem("A ở T1 đ
 r = await json(await A("/inbox/conversations/hc-k-t2-0", T2)); kiem("A ở T2 đọc hội thoại của T2 → 200", r.ma === 200, `${r.ma}`);
 
 // Bài đăng theo trang.
-r = await json(await A("/posts", T1)); kiem("Bài của T1 chỉ có bài T1", r.ma === 200 && r.du.data.length === 1 && r.du.data[0].content === "Bài của k-t1", `${r.du?.data?.map((x: any) => x.content)}`);
+// Theo trang của từng bài, không theo "T1 đúng 1 bài" — T1 có thể có bài thử từ lần kiểm giao diện trước.
+r = await json(await A("/posts", T1));
+kiem("Bài của T1 chỉ có bài T1", r.ma === 200 && r.du.data.every((x: any) => Number(x.trang_id) === T1) && r.du.data.some((x: any) => x.content === "Bài của k-t1"),
+  `${r.du?.data?.map((x: any) => `${x.trang_id}:${x.content}`)}`);
 r = await json(await A("/posts", T2, { method: "POST", body: JSON.stringify({ content: "Bài mới T2", targetAccountIds: ["k-t1"] }) }));
 kiem("Tạo bài ở T2 nhắm kênh của T1 → 400", r.ma === 400, `${r.ma} ${r.du?.error}`);
 r = await json(await A("/posts", T2, { method: "POST", body: JSON.stringify({ content: "Bài mới T2", targetAccountIds: ["k-t2"] }) }));

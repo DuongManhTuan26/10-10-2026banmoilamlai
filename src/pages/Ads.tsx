@@ -6,6 +6,8 @@ import AITrainingModal from '../components/AITrainingModal';
 import { api, ApiError, formatCurrency, type Post } from '../lib/api';
 import BangLoi from '../components/BangLoi';
 import { hoiNhap, hoiXacNhan } from '../components/HopHoi';
+import { Link } from 'react-router-dom';
+import { aiTheoMa } from '../lib/bon-ai';
 
 /** Trạng thái Meta -> nhãn tiếng Việt mà giao diện đang dùng. */
 function statusLabel(metaStatus: string): string {
@@ -105,6 +107,8 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
   const [campaigns, setCampaigns] = useState<Array<Record<string, unknown>>>([]);
   const [audiences, setAudiences] = useState<Array<Record<string, unknown>>>([]);
   const [insights, setInsights] = useState<Record<string, unknown> | null>(null);
+  /** Đơn chốt có mã quảng cáo trong cùng kỳ — đếm từ đơn thật của trang (máy chủ: donTuQuangCao). */
+  const [donQuangCao, setDonQuangCao] = useState<{ so: number; doanhThu: number; theoNgay: { ngay: string; so: number }[] } | null>(null);
   const [boostablePosts, setBoostablePosts] = useState<Post[]>([]);
   const [notice, setNotice] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -143,6 +147,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
       setCampaigns(overview.data.campaigns);
       setAudiences(overview.data.audiences);
       setInsights(overview.data.insights);
+      setDonQuangCao(overview.data.donQuangCao ?? null);
       setBoostablePosts(posts.data);
       setNotice(overview.message ?? '');
     } catch (error) {
@@ -523,13 +528,22 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
     const raw = (insights ?? {}) as Record<string, any>;
     const series = Array.isArray(raw.data) ? raw.data : [];
     if (series.length === 0) return [] as Array<{ name: string; reach: number; orders: number }>;
-    return series.map((row: Record<string, any>) => ({
-      name: row.date_start
-        ? new Date(row.date_start).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
-        : '',
-      reach: Number(row.reach ?? row.impressions ?? 0),
-      orders: Number(row.actions?.length ?? 0),
-    }));
+    /*
+     * "Đơn chốt" = đơn THẬT có mã quảng cáo rơi vào khoảng ngày của dòng số liệu (date_start → date_stop, YYYY-MM-DD).
+     * Bản cũ vẽ `actions.length` — số LOẠI hành động Meta trả về (bình luận, nhấp, xem…), không phải số đơn.
+     */
+    const theoNgay = donQuangCao?.theoNgay ?? [];
+    return series.map((row: Record<string, any>) => {
+      const tu = String(row.date_start ?? '');
+      const den = String(row.date_stop ?? row.date_start ?? '');
+      return {
+        name: row.date_start
+          ? new Date(row.date_start).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+          : '',
+        reach: Number(row.reach ?? row.impressions ?? 0),
+        orders: theoNgay.filter((d) => d.ngay >= tu && d.ngay <= den).reduce((t, d) => t + d.so, 0),
+      };
+    });
   })();
 
   /** Chiến dịch Meta -> hình dạng mà thẻ chiến dịch trên giao diện đang vẽ. */
@@ -759,27 +773,28 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
             <h3 className="tieu-de-muc mb-1">ĐƠN CHỐT TỪ QUẢNG CÁO</h3>
             <div className="flex items-baseline gap-2">
               {/*
-                * Ô này KHÔNG bịa được cũng không đoán được.
-                *
-                * Muốn biết một đơn đến từ quảng cáo nào thì phải gắn được đơn
-                * với chiến dịch. Hiện chưa có chỗ nào lưu mối nối đó: bảng đơn
-                * chỉ ghi ai chốt (AI hay người), hội thoại không mang mã chiến
-                * dịch. Nên con số 47 và "chi phí 264.893 đ mỗi đơn" trước đây
-                * không phải số sai — mà là số không thể tính ra.
-                *
-                * Nói thẳng là chưa đo được, hơn là hiện 0 cho có.
+                * Đơn mang mã quảng cáo (orders.origin_ad_id — khách bấm quảng cáo rồi nhắn tin, Meta gửi kèm mã quảng
+                * cáo), cùng kỳ với các ô bên cạnh. Bản trước ghi "Chưa đo được" từ khi chưa có mối nối này.
                 */}
-              <span className="font-headline-sm text-xl font-bold text-on-surface-variant">Chưa đo được</span>
+              <span className="font-headline-sm text-3xl font-bold text-on-surface">
+                {donQuangCao ? donQuangCao.so.toLocaleString('vi-VN') : '—'}
+              </span>
             </div>
             <p className="text-xs text-on-surface-variant mt-1 font-medium">
-              Cần gắn đơn với chiến dịch mới tính được
+              {!donQuangCao || donQuangCao.so === 0
+                ? `Đơn của khách đến từ quảng cáo · ${ghiChuKy.toLowerCase()}`
+                : `${formatCurrency(donQuangCao.doanhThu)}`
+                  + (soLieu?.daChi ? ` · ${formatCurrency(Math.round(soLieu.daChi / donQuangCao.so))} tiền quảng cáo mỗi đơn` : '')}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Row 2: Selection Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      {/*
+        Row 2. Thẻ "Tạo chiến dịch mới" (tự làm quảng cáo không cần đăng bài) đã gỡ — luồng đó không tồn tại, bấm vào
+        chỉ mở lại đúng luồng đẩy bài (rà soát lượt 2, L8). AI quảng cáo không tạo chiến dịch mới (docs/ton-dong.md TD-12).
+      */}
+      <div className="grid grid-cols-1 gap-4 mb-8">
         <button onClick={openFlow} className="bg-surface-container border border-outline-variant rounded-2xl p-6 text-left flex gap-5 items-start group hover:border-primary/50 transition-colors hover:bg-surface-container/50">
           <div className="w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
             <span className="material-symbols-outlined text-3xl text-blue-400">rocket_launch</span>
@@ -792,17 +807,6 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
           </div>
         </button>
 
-        <button onClick={openFlow} className="bg-surface-container border border-outline-variant rounded-2xl p-6 text-left flex gap-5 items-start group hover:border-primary/50 transition-colors hover:bg-surface-container/50">
-          <div className="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-3xl text-purple-400">stars</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-on-surface mb-2">Tạo chiến dịch mới</h3>
-            <p className="text-sm text-on-surface-variant leading-relaxed">
-              Tự làm nội dung quảng cáo riêng, không cần đăng bài lên trang trước. Kiểm soát được nhiều hơn.
-            </p>
-          </div>
-        </button>
       </div>
 
       {/* Row 3: Performance Chart */}
@@ -843,7 +847,7 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
       </div>
 
       {/* Row 4: Campaigns List */}
-      <div className="bg-surface-container border border-outline-variant rounded-2xl overflow-hidden mb-8">
+      <div id="ds-chien-dich" className="bg-surface-container border border-outline-variant rounded-2xl overflow-hidden mb-8 scroll-mt-6">
         <div className="p-6 border-b border-outline-variant/50">
           <div className="flex flex-wrap gap-2">
             {['Tất cả', 'Đang chạy', 'Tạm dừng', 'Đã kết thúc'].map(opt => (
@@ -1052,15 +1056,23 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                   <div className="w-24 h-24 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(34,197,94,0.2)]">
                     <span className="material-symbols-outlined text-[48px] text-green-400">check_circle</span>
                   </div>
-                  <h2 className="text-2xl font-bold text-on-surface mb-3">Chiến dịch đã bắt đầu chạy</h2>
+                  <h2 className="text-2xl font-bold text-on-surface mb-3">Đã tạo quảng cáo</h2>
                   <p className="text-on-surface-variant mb-8 leading-relaxed">
-                    Bạn sẽ nhận được thông báo qua Telegram khi có khách bình luận và AI bắt đầu nhắn tin.
+                    Meta xét duyệt quảng cáo trước khi chạy. Khách bình luận hoặc nhắn tin từ quảng cáo sẽ được AI bán hàng
+                    trả lời; đơn chốt được báo qua Telegram.
                   </p>
                   <div className="flex gap-4 w-full">
                     <button onClick={closeFlow} className="flex-1 py-3 px-4 bg-surface-container border border-outline-variant text-on-surface font-bold rounded-xl hover:bg-surface-variant transition-colors">
                       Đóng
                     </button>
-                    <button onClick={closeFlow} className="flex-1 py-3 px-4 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform shadow-[0_4px_15px_rgba(0,229,255,0.3)]">
+                    <button
+                      onClick={() => {
+                        closeFlow();
+                        // Danh sách chiến dịch nằm ngay trên trang này (đã nạp lại sau khi tạo) — cuộn tới đó.
+                        setTimeout(() => document.getElementById('ds-chien-dich')?.scrollIntoView({ behavior: 'smooth' }), 50);
+                      }}
+                      className="flex-1 py-3 px-4 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform shadow-[0_4px_15px_rgba(0,229,255,0.3)]"
+                    >
                       Xem chiến dịch
                     </button>
                   </div>
@@ -1072,6 +1084,23 @@ export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {
                     Nên chọn bài đang có nhiều bình luận, vì đó là dấu hiệu nội dung được đón nhận tốt
                   </p>
 
+                  {displayPosts.length === 0 && (
+                    <div className="mb-8 rounded-xl border border-dashed border-outline-variant p-8 text-center">
+                      <span className="material-symbols-outlined text-[40px] text-on-surface-variant">post_add</span>
+                      <p className="mt-3 font-bold text-on-surface">Chưa có bài đã đăng nào để quảng cáo</p>
+                      <p className="mt-1 text-sm text-on-surface-variant">
+                        Chỉ bài đã đăng lên Fanpage mới đẩy thành quảng cáo được. Đăng bài ở {aiTheoMa('content').ten} rồi quay lại đây.
+                      </p>
+                      <Link
+                        to={`${aiTheoMa('content').duong}?the=dang-lam`}
+                        onClick={closeFlow}
+                        className={clsx(NUT_PHU, 'mt-5 inline-flex')}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">{aiTheoMa('content').bieuTuong}</span>
+                        Sang {aiTheoMa('content').ten}
+                      </Link>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     {displayPosts.map((post) => (
                       <button 

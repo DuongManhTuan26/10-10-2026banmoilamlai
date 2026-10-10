@@ -10,6 +10,36 @@ import { loadKnowledge } from "../services/knowledge.js";
 import { boMarkdown, DAN_KHONG_MARKDOWN } from "../services/text.js";
 import { chanLamDungAI } from "../services/chong-lam-dung.js";
 import { ghiThayDoiNgoai } from "../services/so-thay-doi.js";
+import { DAU_NGAY_VN, DAU_THANG_VN } from "../moc-thoi-gian.js";
+
+/*
+ * ĐƠN CHỐT TỪ QUẢNG CÁO trong cùng kỳ với số liệu Meta (ô số + biểu đồ trang Quảng cáo). Đơn mang mã quảng cáo
+ * (orders.origin_ad_id, migration 042) — nối bằng mã thật, không đoán. Kỳ theo đúng cách Meta hiểu date_preset:
+ * last_7d / last_30d = N ngày TRƯỚC hôm nay (không tính hôm nay), this_month = từ đầu tháng tới giờ — giờ Việt Nam.
+ * Chỉ nhận đúng các kỳ này — không ghép chữ người dùng vào câu lệnh.
+ */
+const KY_DON: Record<string, string> = {
+  last_7d: `created_at >= ${DAU_NGAY_VN} - interval '7 days' AND created_at < ${DAU_NGAY_VN}`,
+  last_30d: `created_at >= ${DAU_NGAY_VN} - interval '30 days' AND created_at < ${DAU_NGAY_VN}`,
+  this_month: `created_at >= ${DAU_THANG_VN}`,
+};
+
+async function donTuQuangCao(trangId: number, datePreset: string) {
+  const ky = KY_DON[datePreset] ?? KY_DON.last_7d;
+  const r = await query<{ ngay: string; so: number; doanh_thu: string }>(
+    `SELECT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS ngay,
+            count(*)::int AS so, coalesce(sum(total), 0)::text AS doanh_thu
+       FROM orders
+      WHERE trang_id = $1 AND origin_ad_id IS NOT NULL AND status <> 'cancelled' AND ${ky}
+      GROUP BY 1 ORDER BY 1`,
+    [trangId]
+  );
+  return {
+    so: r.rows.reduce((t, x) => t + x.so, 0),
+    doanhThu: r.rows.reduce((t, x) => t + Number(x.doanh_thu), 0),
+    theoNgay: r.rows.map((x) => ({ ngay: x.ngay, so: x.so })),
+  };
+}
 
 export const adsRouter = Router();
 
@@ -72,6 +102,10 @@ adsRouter.get(
   "/overview",
   route(async (req, res) => {
     const resolved = await resolveAdAccount(naoCua(req).trangId);
+    const datePreset =
+      typeof req.query.range === "string" && req.query.range ? req.query.range : "last_7d";
+    // Đơn có mã quảng cáo vẫn đếm được khi tài khoản quảng cáo đang ngắt (đơn cũ vẫn là đơn thật).
+    const donQuangCao = await donTuQuangCao(naoCua(req).trangId, datePreset);
 
     if (!resolved) {
       res.json({
@@ -82,6 +116,7 @@ adsRouter.get(
           campaigns: [],
           insights: null,
           audiences: [],
+          donQuangCao,
         },
         message:
           "Chưa kết nối tài khoản quảng cáo. Tài khoản Meta Ads tự có khi bạn " +
@@ -89,9 +124,6 @@ adsRouter.get(
       });
       return;
     }
-
-    const datePreset =
-      typeof req.query.range === "string" && req.query.range ? req.query.range : "last_7d";
 
     // Từng phần lấy độc lập: một phần lỗi không được làm trắng cả trang.
     const [campaigns, insights, audiences] = await Promise.all([
@@ -151,6 +183,7 @@ adsRouter.get(
         campaigns: campaigns.campaigns,
         insights,
         audiences,
+        donQuangCao,
       },
     });
   })

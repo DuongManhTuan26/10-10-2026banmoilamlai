@@ -2198,8 +2198,9 @@ kiem("trang quảng cáo", "huy hiệu đầu trang đếm chiến dịch thật
     !/4 CHIẾN DỊCH ĐANG CHẠY/.test(maQC), true);
 kiem("trang quảng cáo", "chưa nối kênh thì nói thẳng là chưa nối",
   /CHƯA NỐI TÀI KHOẢN QUẢNG CÁO/.test(maQC), true);
-kiem("trang quảng cáo", "đơn chốt từ quảng cáo: nói chưa đo được thay vì bịa",
-  /Chưa đo được/.test(maQC) && /Cần gắn đơn với chiến dịch mới tính được/.test(maQC), true);
+// Từ 11/10/2026 đo được thật (orders.origin_ad_id) — ý định giữ nguyên: số lấy từ máy chủ, không ghi cứng, chưa có thì gạch.
+kiem("trang quảng cáo", "đơn chốt từ quảng cáo: số thật từ máy chủ, chưa có thì gạch ngang (không bịa)",
+  /\{donQuangCao \? donQuangCao\.so\.toLocaleString\('vi-VN'\) : '—'\}/.test(maQC), true);
 kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo kỳ",
   /value=\{ky\}/.test(maQC) && /onChange=\{\(e\) => setKy\(e\.target\.value\)\}/.test(maQC) &&
     /api\.ads\.overview\(ky\)/.test(maQC) && /\}, \[ky\]\);/.test(maQC), true);
@@ -5858,6 +5859,53 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     ["huong-dan dang-lam ket-qua nhat-ky", true]);
   kiem("khối não", "luật nhường người và hàng rào đọc theo trang",
     [/FROM handoff_rules WHERE trang_id = \$1/.test(ban), /FROM guardrail_configs WHERE trang_id = \$1/.test(ma("server/services/guardrails.ts"))], [true, true]);
+}
+
+/*
+ * RÀ SOÁT GIAO DIỆN LƯỢT 2 — Giai đoạn 1 (11/10/2026): khoá các lỗi thật L1–L14 (docs/ke-hoach-giao-dien.md) không tái
+ * phát. Đọc mã đã bỏ chú thích — chú thích được phép kể lại chữ cũ.
+ */
+{
+  const doc3 = (f: string) => fs.readFileSync(path.join(GOC, f), "utf8");
+  const ma = (f: string) => boChuThich(doc3(f));
+  const don = ma("src/pages/Orders.tsx");
+  kiem("giao diện lượt 2", "L1: menu ⋯ Đơn hàng không còn nút chỉ đóng menu (nút chết)",
+    /onClick=\{\(e\) => \{ e\.stopPropagation\(\); setOpenDropdownId\(null\); \}\}/.test(don), false);
+  kiem("giao diện lượt 2", "L1/L3: mở đúng hội thoại, huỷ đơn có xác nhận; Hộp thư đọc ?hoi-thoai=",
+    [/hoi-thoai=\$\{encodeURIComponent\(order\.conversationId\)\}/.test(don), /hoiXacNhan\(\{\s*tieuDe: `Huỷ đơn/.test(don),
+      /timUrl\.get\('hoi-thoai'\)/.test(ma("src/pages/Inbox.tsx"))], [true, true, true]);
+  kiem("giao diện lượt 2", "L2: khoảng ngày Đơn hàng là bộ lọc thật (máy chủ chỉ nhận 1/7/30)",
+    [/api\.orders\.list\(\{ soNgay \}\)/.test(don), /const SO_NGAY: Record<string, string> = \{/.test(ma("server/routes/orders.ts"))], [true, true]);
+  kiem("giao diện lượt 2", "L3: hộp chi tiết đơn dựng items / timeline từ dữ liệu thật (bản cũ đọc trường không tồn tại)",
+    [/items: order\.items\?\.length/.test(don), /timeline: \[/.test(don)], [true, true]);
+  const tg = ma("src/pages/TelegramAlerts.tsx");
+  kiem("giao diện lượt 2", "L4: trang Telegram chỉ còn công tắc có đường gửi thật",
+    [...["weekly_summary", "new_comment", "ads_budget", "daily_summary", "dailySummaryTime"].map((k) => tg.includes(k)),
+      /suKienBat\(user_id, "near_24h", true\)/.test(ma("server/services/canh-bao-telegram.ts")),
+      /suKienBat\(userId, "post_published", false\)/.test(ma("server/services/autopilot.ts"))],
+    [false, false, false, false, false, true, true]);
+  kiem("giao diện lượt 2", "L4: cảnh báo sắp hết 24 giờ + kênh hỏng chạy trong worker, chống báo trùng bằng một khoá",
+    [/runDueSapHet24h\(\)/.test(ma("server/worker.ts")), /runDueKenhHong\(\)/.test(ma("server/worker.ts")),
+      /\[user_id, rows\.map\(\(r\) => r\.khoa\)\]/.test(ma("server/services/canh-bao-telegram.ts"))], [true, true, true]);
+  kiem("giao diện lượt 2", "L5: không hứa liên kết trong tin Telegram (tin thật không có)",
+    tg.includes("Bấm vào liên kết trong tin nhắn"), false);
+  const qc = ma("src/pages/Ads.tsx");
+  kiem("giao diện lượt 2", "L6/L7: biểu đồ + ô 'Đơn chốt từ quảng cáo' dùng đơn thật có mã quảng cáo",
+    [/actions\?\.length/.test(qc), qc.includes("Chưa đo được"), /donQuangCao/.test(qc),
+      /origin_ad_id IS NOT NULL AND status <> 'cancelled' AND \$\{ky\}/.test(ma("server/routes/ads.ts"))], [false, false, true, true]);
+  kiem("giao diện lượt 2", "L8/L9: không còn thẻ 'Tạo chiến dịch mới' giả; bước chọn bài có trạng thái trống",
+    [qc.includes("Tạo chiến dịch mới"), qc.includes("Chưa có bài đã đăng nào để quảng cáo")], [false, true]);
+  const nd = ma("src/pages/Content.tsx");
+  kiem("giao diện lượt 2", "L10: thẻ bài hiện ảnh thật, ghi đúng ai viết",
+    [nd.includes("has_image"), /post\.ai_generated \? 'AI viết' : 'Bạn viết'/.test(nd)], [false, true]);
+  kiem("giao diện lượt 2", "L11/L13: không còn chữ bịa (lượt kết nối cứng, 'tỷ lệ khách chặn đang tăng')",
+    [ma("src/pages/Connections.tsx").includes("còn 1 lượt kết nối"), ma("src/pages/Pricing.tsx").includes("tỷ lệ khách chặn đang tăng")], [false, false]);
+  const ht = ma("src/pages/Inbox.tsx");
+  kiem("giao diện lượt 2", "L12: dải ngày theo từng ngày; tiến độ chia đúng số thông tin hiện",
+    [/>Hôm nay<\/span>/.test(ht), /nhanNgay\(msg\.sentAt\)/.test(ht), /\{collectedCount\}\/\{infoKeys\.length\}/.test(ht)], [false, true, true]);
+  kiem("giao diện lượt 2", "L14: đường cấp tài khoản bỏ qua X-Trang (đổi tài khoản vẫn đăng nhập được); đăng xuất quên trang",
+    [/req\.path\.startsWith\("\/auth\/"\)/.test(ma("server/khoi-nao.ts")), /\|\| CAP_TAI_KHOAN\(req\)\) return next\(\);/.test(ma("server/khoi-nao.ts")),
+      /localStorage\.removeItem\(KHOA_TRANG_DANG_CHON\)/.test(ma("src/App.tsx"))], [true, true, true]);
 }
 
 console.log(`\nĐã kiểm ${tong} điểm.`);

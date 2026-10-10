@@ -16,6 +16,17 @@ type DisplayStatus = 'waiting' | 'ai' | 'expiring' | 'expired' | 'done';
  * Gộp trạng thái hội thoại và trạng thái cửa sổ 24 giờ thành một trạng thái
  * hiển thị. Cửa sổ sắp hết được ưu tiên vì đó là thứ khiến shop mất khách.
  */
+/** Nhãn dải ngày giữa các tin: Hôm nay / Hôm qua / dd/mm/yyyy theo giờ máy người xem. */
+function nhanNgay(iso: string): string {
+  const d = new Date(iso);
+  const homNay = new Date();
+  const homQua = new Date(homNay);
+  homQua.setDate(homNay.getDate() - 1);
+  if (d.toDateString() === homNay.toDateString()) return 'Hôm nay';
+  if (d.toDateString() === homQua.toDateString()) return 'Hôm qua';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function displayStatus(conv: Conversation): DisplayStatus {
   if (conv.status === 'done') return 'done';
   if (conv.window_state === 'expired') return 'expired';
@@ -384,6 +395,7 @@ export default function Inbox() {
         senderType: m.sender_type === 'ai' ? 'AI' : m.sender_type === 'customer' ? 'Khách' : m.sender_type === 'system' ? 'Hệ thống' : 'Nhân viên',
         text: m.content,
         time: new Date(m.sent_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        sentAt: m.sent_at,
         isHandoff: m.is_handoff,
       })),
     };
@@ -405,7 +417,8 @@ export default function Inbox() {
   };
 
   const activeInfo = getActiveInfo();
-  const infoKeys = ['name', 'phone', 'address', 'product', 'quantity'];
+  // Đếm đúng các thông tin hiện trong khối (tên, điện thoại, địa chỉ) — bản cũ chia cho 5 dù chỉ hiện 3 dòng.
+  const infoKeys = ['name', 'phone', 'address'];
   const collectedCount = activeInfo
     ? infoKeys.filter((k) => activeInfo[k as keyof typeof activeInfo] && activeInfo[k as keyof typeof activeInfo] !== 'Chưa có').length
     : 0;
@@ -701,11 +714,21 @@ export default function Inbox() {
                 </div>
               )}
 
-              <div className="text-center">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant/60">Hôm nay</span>
-              </div>
-              
-              {selectedConv.messages.map((msg: any) => {
+              {/*
+                Dải ngày đặt trước tin đầu tiên của MỖI ngày. Bản cũ là một dải "Hôm nay" cố định ở đầu, kể cả hội thoại
+                từ tuần trước.
+              */}
+              {selectedConv.messages.flatMap((msg: any, i: number, ds: any[]) => {
+                const ngay = nhanNgay(msg.sentAt);
+                return i === 0 || nhanNgay(ds[i - 1].sentAt) !== ngay ? [{ laDaiNgay: true, id: `ngay-${msg.id}`, nhan: ngay }, msg] : [msg];
+              }).map((msg: any) => {
+                if (msg.laDaiNgay) {
+                  return (
+                    <div key={msg.id} className="text-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-container-low px-3 py-1 rounded-full border border-outline-variant/60">{msg.nhan}</span>
+                    </div>
+                  );
+                }
                 const isShop = msg.sender === 'shop';
                 const isAI = isShop && msg.senderType === 'AI';
                 const isHeThong = msg.senderType === 'Hệ thống';
@@ -895,12 +918,12 @@ export default function Inbox() {
                   <div className="pt-3 border-t border-outline-variant/60">
                     <div className="flex justify-between text-[10px] font-bold text-on-surface mb-1.5">
                       <span>Tiến độ thu thập</span>
-                      <span className="text-primary">{collectedCount}/5</span>
+                      <span className="text-primary">{collectedCount}/{infoKeys.length}</span>
                     </div>
                     <div className="w-full bg-surface-variant rounded-full h-1 overflow-hidden">
                       <div 
                         className="bg-primary h-full rounded-full transition-all duration-500"
-                        style={{ width: `${(collectedCount / 5) * 100}%` }}
+                        style={{ width: `${(collectedCount / infoKeys.length) * 100}%` }}
                       ></div>
                     </div>
                   </div>
