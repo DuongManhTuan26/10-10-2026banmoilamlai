@@ -5834,6 +5834,23 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
     [/ma: "tien_moi_don"/.test(sk), /ma: "doanh_thu_tren_chi_phi"/.test(sk),
       /const chiPhi = \(t: ThanhPhanTien\) => t\.tienAiVnd \+ \(t\.tienQcVnd \?\? 0\);/.test(sk),
       /interface ChiSoCuoi \{[\s\S]{0,300}?muc:/.test(sk)], [true, true, true, false]);
+  // Vòng lặp tự hoàn thiện (rà soát 10/10/2026): đo → chẩn đoán → duyệt + chỉ đạo → AI nhân viên làm theo → đo lại → hoàn tác.
+  const cd = ma("server/services/chi-dao.ts");
+  kiem("vòng lặp", "chỉ đạo gắn vào lời dặn của CẢ 3 AI nhân viên",
+    [/await chiDaoChoAi\(conversation\.trang_id, "sales"\)/.test(ma("server/services/sales-ai.ts")),
+      /await chiDaoChoAi\(params\.trangId \?\? null, "content"\)/.test(ma("server/services/content-ai.ts")),
+      /await chiDaoChoAi\(naoCua\(req\)\.trangId, "ads"\)/.test(ma("server/routes/ads.ts"))], [true, true, true]);
+  kiem("vòng lặp", "đo lại sau NGAY_DO ngày bằng CODE (không hỏi AI); xấu đi thì tự hoàn tác + báo chủ shop",
+    [/export const NGAY_DO = 7;/.test(cd), /trang_thai = CASE WHEN \$2 = 'xau_di' THEN 'hoan_tac' ELSE trang_thai END/.test(cd),
+      /chatJson|chat\(/.test(cd)], [true, true, false]);
+  kiem("vòng lặp", "mỗi AI tối đa vài chỉ đạo đang áp dụng (đổi ít thứ một lúc để đo được)", /export const TOI_DA_DANG_AP_DUNG = 3;/.test(cd), true);
+  const dhn = ma("server/services/dieu-hanh-ngay.ts");
+  kiem("vòng lặp", "nhịp ngày: báo cáo do code lập (bật sẵn); tự chẩn đoán tốn tiền thì mặc định TẮT và phải có trần tháng",
+    [/LICH_MAC_DINH: LichDieuHanh = \{ baoCaoNgay: true, gio: "07:30", tuChanDoan: false, tranThangUsd: 0 \}/.test(dhn),
+      /if \(!\(lich\.tranThangUsd > 0\)\) return \[/.test(dhn), /if \(daDung \+ UOC_MOT_LAN_USD > lich\.tranThangUsd\)/.test(dhn),
+      /cheDo: "de_xuat"/.test(dhn), /ON CONFLICT \(trang_id, report_date, kind\) DO NOTHING RETURNING id/.test(dhn)], [true, true, true, true, true]);
+  kiem("vòng lặp", "worker chạy nhịp ngày có hạn giờ",
+    /await coHanGio\("điều hành hằng ngày", runDueDieuHanhNgay\(\), 5 \* HAN_MOI_VIEC_MS\)/.test(ma("server/worker.ts")), true);
   kiem("khối não", "luật nhường người và hàng rào đọc theo trang",
     [/FROM handoff_rules WHERE trang_id = \$1/.test(ban), /FROM guardrail_configs WHERE trang_id = \$1/.test(ma("server/services/guardrails.ts"))], [true, true]);
 }

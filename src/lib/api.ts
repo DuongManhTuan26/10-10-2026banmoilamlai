@@ -657,7 +657,26 @@ export interface DeXuatDieuHanh {
   tien_usd: number;
   thoi_gian_ms: number;
   noi_dung: string | null;
+  /** Nhân viên các việc đề xuất nhắm tới (noi_dung | quang_cao | ban_hang | chu_shop | he_thong). */
+  nhan_vien?: string[];
 }
+
+/** Một chỉ đạo của AI điều hành xuống AI nhân viên (server/services/chi-dao.ts). */
+export interface ChiDao {
+  id: number;
+  de_xuat_id: number | null;
+  ai: 'content' | 'ads' | 'sales';
+  noi_dung: string;
+  trang_thai: 'dang_ap_dung' | 'da_go' | 'hoan_tac';
+  luc_bat_dau: string;
+  luc_ket_thuc: string | null;
+  ket_qua: 'chua_do' | 'tot_len' | 'giu_nguyen' | 'xau_di';
+  ket_qua_chi_tiet: { xauDi?: string[]; totLen?: string[] } | null;
+  luc_do: string | null;
+  ly_do_go: string | null;
+  luc_se_do: string;
+}
+export interface LichDieuHanh { baoCaoNgay: boolean; gio: string; tuChanDoan: boolean; tranThangUsd: number }
 
 export interface ThanhPhanTien { don: number; doanhThu: number; tienAiVnd: number; tienQcVnd: number | null }
 /** Chỉ số cuối của khối não (server/services/suc-khoe.ts — ChiSoCuoi): để theo dõi, không chấm tốt / tụt. */
@@ -974,6 +993,13 @@ export const api = {
   khoiNao: {
     danhSach: () => get<{ data: { bonAi: { so: number; ma: MaAi; khau: string; ten: string }[]; ds: KhoiNaoInfo[] } }>("/khoi-nao"),
     nhatKy: (ai: MaAi) => get<{ data: NhatKyAi }>(`/khoi-nao/nhat-ky/${ai}`),
+    chiDao: () => get<{ data: ChiDao[] }>("/khoi-nao/chi-dao"),
+    themChiDao: (ai: string, noiDung: string) => post<{ data: { id: number } }>("/khoi-nao/chi-dao", { ai, noiDung }),
+    goChiDao: (id: number, lyDo?: string) => post<{ success: true }>(`/khoi-nao/chi-dao/${id}/go`, { lyDo }),
+    lich: () => get<{ data: { lich: LichDieuHanh; daDungThangUsd: number } }>("/khoi-nao/lich-dieu-hanh"),
+    luuLich: (lich: LichDieuHanh) => put<{ data: { lich: LichDieuHanh } }>("/khoi-nao/lich-dieu-hanh", { lich }),
+    xemTruocBaoCao: () => get<{ data: { noiDung: string } }>("/khoi-nao/bao-cao-ngay/xem-truoc"),
+    baoCaoNgay: () => get<{ data: { report_date: string; findings: string; created_at: string }[] }>("/khoi-nao/bao-cao-ngay"),
   },
   /** Quản trị hệ thống. Máy chủ chặn người không phải quản trị, đây chỉ là lớp gọi. */
   admin: {
@@ -1556,8 +1582,8 @@ export const api = {
     dieuHanhChay: (trangId: number, vanDe: string) =>
       post<{ data: { id: number; ketQua: string; soLuotAi: number; tienUsd: number; giay: number } }>("/quan-ly/dieu-hanh/chay", { trangId, vanDe }),
     dieuHanhDeXuat: (trangId: number) => get<{ data: DeXuatDieuHanh[] }>(`/quan-ly/dieu-hanh/de-xuat?trangId=${trangId}`),
-    dieuHanhQuyet: (id: number, duyet: boolean, lyDo?: string) =>
-      post<{ success: true }>(`/quan-ly/dieu-hanh/de-xuat/${id}/quyet`, { duyet, lyDo }),
+    dieuHanhQuyet: (id: number, duyet: boolean, lyDo?: string, chiDao?: { ai: string; noiDung: string }[]) =>
+      post<{ success: true }>(`/quan-ly/dieu-hanh/de-xuat/${id}/quyet`, { duyet, lyDo, chiDao }),
     /** Báo cáo chuỗi 4 khâu của một trang. */
     baoCaoChuoi: (trangId: number, ky: KyTongQuan) =>
       get<{ data: BaoCaoChuoi }>(`/quan-ly/bao-cao-chuoi?trangId=${trangId}&ky=${ky}`),

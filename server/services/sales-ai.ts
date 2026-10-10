@@ -1,4 +1,5 @@
 import { query, queryOne, transaction } from "../db.js";
+import { chiDaoChoAi } from "./chi-dao.js";
 import { chat, chatJson, asRecord, optionalString } from "./ai.js";
 import { docCacBuoc, moTaCacBuoc, maCacBuoc } from "./sales-stages.js";
 import { docTuChu, moTaTuChu, type TuChuConfig } from "./sales-autonomy.js";
@@ -879,6 +880,8 @@ const CHUA_CO_TAI_LIEU = [
     LUAT_NOI_DUNG_ANH,
     "",
     boiCanhKhach,
+    // Chỉ đạo của AI điều hành đã được chủ shop duyệt (server/services/chi-dao.ts).
+    await chiDaoChoAi(conversation.trang_id, "sales"),
     "",
     tuChu.bat
       ? moTaTuChu(tuChu)

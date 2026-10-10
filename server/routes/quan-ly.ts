@@ -50,6 +50,7 @@ import * as zernio from "../services/zernio.js";
 import { hashPassword } from "../auth.js";
 
 import { moKhoiNao } from "../khoi-nao.js";
+import { taoChiDao, type AiNhanVien } from "../services/chi-dao.js";
 export const quanLyRouter = Router();
 
 quanLyRouter.use(requireAuth);
@@ -379,10 +380,28 @@ quanLyRouter.post(
     const dx = await trangCuaDeXuat(Number(req.params.id));
     if (!dx) throw new AppError("Không tìm thấy đề xuất", 404);
     await trangTrongPhamVi(req.user!, dx.trang_id);
-    const ok = await chuShopQuyet({ id: Number(req.params.id), userId: dx.user_id, duyet: req.body?.duyet === true,
+    const duyet = req.body?.duyet === true;
+    /*
+     * Duyệt kèm CHỈ ĐẠO (vòng lặp tự hoàn thiện — services/chi-dao.ts): chủ shop sửa / xác nhận câu chỉ đạo cho từng AI
+     * nhân viên; câu đó được gắn vào lời dặn của AI ấy và đo lại sau NGAY_DO ngày. Kiểm hết TRƯỚC khi ghi duyệt.
+     */
+    const chiDao = (Array.isArray(req.body?.chiDao) ? req.body.chiDao : [])
+      .map((x: unknown) => x as { ai?: unknown; noiDung?: unknown })
+      .map((x: { ai?: unknown; noiDung?: unknown }) => ({ ai: String(x.ai ?? ""), noiDung: String(x.noiDung ?? "").trim() }))
+      .filter((x: { noiDung: string }) => x.noiDung);
+    if (!duyet && chiDao.length) throw new AppError("Bác đề xuất thì không gửi chỉ đạo", 400);
+    for (const c of chiDao) {
+      if (!["content", "ads", "sales"].includes(c.ai)) throw new AppError("Chỉ đạo chỉ gửi cho AI nội dung, quảng cáo hoặc bán hàng", 400);
+    }
+    const ok = await chuShopQuyet({ id: Number(req.params.id), userId: dx.user_id, duyet,
       lyDo: typeof req.body?.lyDo === "string" ? req.body.lyDo.trim().slice(0, 1000) : undefined });
     if (!ok) throw new AppError("Đề xuất này đã được quyết rồi", 409);
-    res.json({ success: true });
+    const daTao: number[] = [];
+    for (const c of chiDao) {
+      daTao.push(await taoChiDao({ trangId: dx.trang_id, userId: dx.user_id, ai: c.ai as AiNhanVien, noiDung: c.noiDung,
+        deXuatId: Number(req.params.id), nguon: "ai_dieu_hanh" }));
+    }
+    res.json({ success: true, data: { chiDao: daTao } });
   })
 );
 

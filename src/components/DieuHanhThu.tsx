@@ -32,9 +32,13 @@ const TEN_TRANG_THAI: Record<DeXuatDieuHanh['trang_thai'], { chu: string; mau: s
   bac: { chu: 'Đã bác', mau: 'bg-red-500/15 text-red-400' },
 };
 const usd = (x: number) => `${x.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} USD`;
+/** Mã nhân viên trong đề xuất → AI nhân viên nhận chỉ đạo. */
+const AI_CUA_NHAN_VIEN: Record<string, 'content' | 'ads' | 'sales'> = { noi_dung: 'content', quang_cao: 'ads', ban_hang: 'sales' };
+const TEN_AI_NV: Record<'content' | 'ads' | 'sales', string> = { content: '① AI Nội dung', ads: '② AI Quảng cáo', sales: '③ AI Bán hàng' };
+type DongChiDao = { ai: 'content' | 'ads' | 'sales'; noiDung: string };
 const loiChu = (e: unknown, macDinh: string) => (e instanceof ApiError ? e.message : macDinh);
 
-export default function DieuHanhThu({ trangId }: { trangId: number }) {
+export default function DieuHanhThu({ trangId, onDaDoi }: { trangId: number; /** Gọi sau khi duyệt (sổ chỉ đạo đổi). */ onDaDoi?: () => void }) {
   const [so, setSo] = useState<SoDieuHanh | null>(null);
   const [deXuat, setDeXuat] = useState<DeXuatDieuHanh[] | null>(null);
   const [loi, setLoi] = useState('');
@@ -43,6 +47,8 @@ export default function DieuHanhThu({ trangId }: { trangId: number }) {
   const [moDeXuat, setMoDeXuat] = useState<number | null>(null);
   const [vanDe, setVanDe] = useState('');
   const [dangChay, setDangChay] = useState(false);
+  /** Đang duyệt đề xuất nào + các câu chỉ đạo sẽ gửi xuống AI nhân viên. */
+  const [duyetMo, setDuyetMo] = useState<{ id: number; ds: DongChiDao[] } | null>(null);
 
   const tai = useCallback(async () => {
     try {
@@ -86,7 +92,13 @@ export default function DieuHanhThu({ trangId }: { trangId: number }) {
     }
   };
 
-  const quyet = async (d: DeXuatDieuHanh, duyet: boolean) => {
+  /** Bấm Duyệt → mở ô soạn chỉ đạo, gợi ý sẵn đúng AI nhân viên mà đề xuất nhắm tới. */
+  const moDuyet = (d: DeXuatDieuHanh) => {
+    const ais = [...new Set((d.nhan_vien ?? []).map((n) => AI_CUA_NHAN_VIEN[n]).filter(Boolean))];
+    setDuyetMo({ id: d.id, ds: (ais.length ? ais : ['sales' as const]).map((ai) => ({ ai, noiDung: '' })) });
+  };
+
+  const quyet = async (d: DeXuatDieuHanh, duyet: boolean, chiDao?: DongChiDao[]) => {
     let lyDo: string | undefined;
     if (!duyet) {
       const nhap = await hoiNhap({ tieuDe: 'Bác đề xuất này?', nhan: 'Lý do (để sổ lỗi ghi lại — chưa coi là AI sai)', goiY: 'vd. không muốn đổi lúc này / nguyên nhân sai…', nutDongY: 'Bác', nguyHiem: true });
@@ -94,8 +106,10 @@ export default function DieuHanhThu({ trangId }: { trangId: number }) {
       lyDo = nhap;
     }
     try {
-      await api.quanLy.dieuHanhQuyet(d.id, duyet, lyDo);
+      await api.quanLy.dieuHanhQuyet(d.id, duyet, lyDo, chiDao?.filter((c) => c.noiDung.trim()));
+      setDuyetMo(null);
       await tai();
+      onDaDoi?.();
     } catch (e) {
       await baoTin({ tieuDe: 'Chưa ghi được', noiDung: loiChu(e, 'Có lỗi') });
     }
@@ -196,11 +210,47 @@ export default function DieuHanhThu({ trangId }: { trangId: number }) {
                   <div className="mt-2 space-y-2">
                     <pre className="whitespace-pre-wrap font-sans text-xs text-on-surface bg-surface-container-high rounded-lg px-3 py-2">{d.noi_dung ?? '(chưa có nội dung)'}</pre>
                     {d.ly_do_chu_shop && <p className="text-xs text-on-surface-variant">Lý do bác: {d.ly_do_chu_shop}</p>}
-                    {d.trang_thai === 'cho_duyet' && (
+                    {d.trang_thai === 'cho_duyet' && duyetMo?.id !== d.id && (
                       <div className="flex gap-2">
-                        <button type="button" onClick={() => quyet(d, true)} className="rounded-lg bg-green-500/15 text-green-400 px-3 py-1.5 text-xs font-bold">Duyệt</button>
+                        <button type="button" onClick={() => moDuyet(d)} className="rounded-lg bg-green-500/15 text-green-400 px-3 py-1.5 text-xs font-bold">Duyệt…</button>
                         <button type="button" onClick={() => quyet(d, false)} className="rounded-lg bg-red-500/15 text-red-400 px-3 py-1.5 text-xs font-bold">Bác</button>
-                        <span className="text-[11px] text-on-surface-variant self-center">Duyệt chỉ ghi nhận — chưa thực thi gì.</span>
+                      </div>
+                    )}
+                    {/*
+                      Duyệt = gửi CHỈ ĐẠO xuống AI nhân viên (vòng lặp tự hoàn thiện). Câu chỉ đạo do CHỦ SHOP viết / sửa —
+                      AI điều hành chỉ đề xuất hướng. Chỉ đạo gắn vào lời dặn của AI đó, đo lại sau 7 ngày, xấu đi thì
+                      tự hoàn tác.
+                    */}
+                    {duyetMo?.id === d.id && (
+                      <div className="rounded-lg border border-green-500/40 bg-green-500/5 p-3 space-y-2">
+                        <div className="text-xs font-bold text-green-400">Gửi chỉ đạo xuống AI nhân viên</div>
+                        {duyetMo.ds.map((c, i) => (
+                          <div key={i} className="flex flex-col sm:flex-row gap-2">
+                            <select
+                              value={c.ai}
+                              onChange={(e) => setDuyetMo((m) => m && { ...m, ds: m.ds.map((x, j) => (j === i ? { ...x, ai: e.target.value as DongChiDao['ai'] } : x)) })}
+                              className={clsx(O_NHAP, 'sm:w-48')}
+                            >
+                              {(Object.keys(TEN_AI_NV) as DongChiDao['ai'][]).map((a) => <option key={a} value={a}>{TEN_AI_NV[a]}</option>)}
+                            </select>
+                            <textarea
+                              value={c.noiDung}
+                              maxLength={2000}
+                              onChange={(e) => setDuyetMo((m) => m && { ...m, ds: m.ds.map((x, j) => (j === i ? { ...x, noiDung: e.target.value } : x)) })}
+                              placeholder='Câu chỉ đạo cụ thể, vd. "Khi khách hỏi phí ship, báo đúng: miễn phí đơn từ 300.000đ, dưới đó 30.000đ."'
+                              className="flex-1 min-h-[72px] rounded-xl bg-surface-container-high border border-outline-variant px-3 py-2 text-sm text-on-surface outline-none focus:border-primary"
+                            />
+                          </div>
+                        ))}
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setDuyetMo((m) => m && { ...m, ds: [...m.ds, { ai: 'sales', noiDung: '' }] })}
+                            className="rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-bold text-on-surface">+ Thêm chỉ đạo</button>
+                          <button type="button" onClick={() => quyet(d, true, duyetMo.ds)} disabled={!duyetMo.ds.some((x) => x.noiDung.trim())}
+                            className="rounded-lg bg-green-500/15 text-green-400 px-3 py-1.5 text-xs font-bold disabled:opacity-50">Duyệt & gửi chỉ đạo</button>
+                          <button type="button" onClick={() => quyet(d, true, [])} className="rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-bold text-on-surface">Duyệt, chưa gửi chỉ đạo</button>
+                          <button type="button" onClick={() => setDuyetMo(null)} className="px-3 py-1.5 text-xs font-bold text-on-surface-variant">Huỷ</button>
+                        </div>
+                        <p className="text-[11px] text-on-surface-variant">Chỉ đạo được gắn vào lời dặn của AI đó ở mọi lượt; sau 7 ngày hệ thống đo lại khâu của AI — xấu đi thì tự gỡ và báo bạn. Việc dính tiền (ngân sách, giảm giá) vẫn do bạn tự làm.</p>
                       </div>
                     )}
                   </div>

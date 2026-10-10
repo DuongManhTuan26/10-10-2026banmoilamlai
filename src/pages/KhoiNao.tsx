@@ -12,6 +12,7 @@ import { clsx } from 'clsx';
 import KhuonAi from '../components/KhuonAi';
 import { HuongDanAi, KetQuaAi, NhatKyAi } from '../components/TheKhoiNao';
 import DieuHanhThu from '../components/DieuHanhThu';
+import { LichDieuHanhForm, SoChiDao } from '../components/ChiDaoAi';
 import Content from './Content';
 import Ads from './Ads';
 import Inbox from './Inbox';
@@ -29,7 +30,7 @@ export function NoiDungAi() {
       the={{
         'ket-qua': <KetQuaAi ai="content" />,
         'dang-lam': <Content trongKhuon />,
-        'huong-dan': <HuongDanAi ai="content" />,
+        'huong-dan': <HuongDanAi ai="content" them={<KhungChiDao ai="content" />} />,
         'nhat-ky': <NhatKyAi ai="content" />,
       }}
     />
@@ -43,7 +44,7 @@ export function QuangCaoAi() {
       the={{
         'ket-qua': <KetQuaAi ai="ads" />,
         'dang-lam': <Ads trongKhuon />,
-        'huong-dan': <HuongDanAi ai="ads" />,
+        'huong-dan': <HuongDanAi ai="ads" them={<KhungChiDao ai="ads" />} />,
         'nhat-ky': <NhatKyAi ai="ads" />,
       }}
     />
@@ -95,27 +96,59 @@ export function BanHangAi() {
         'ket-qua': <KetQuaAi ai="sales" />,
         'dang-lam': <BanHangDangLam />,
         // Vai trò, tài liệu, các bước bán hàng, tự chủ, kịch bản bình luận — màn hình cấu hình sẵn có của AI bán hàng.
-        'huong-dan': <AutoScripts trongKhuon />,
+        'huong-dan': (
+          <div className="space-y-6">
+            <KhungChiDao ai="sales" />
+            <AutoScripts trongKhuon />
+          </div>
+        ),
         'nhat-ky': <NhatKyAi ai="sales" />,
       }}
     />
   );
 }
 
+/** Chỉ đạo AI điều hành đang gửi cho MỘT AI nhân viên — hiện ở thẻ Hướng dẫn AI của AI đó (gỡ được). */
+function KhungChiDao({ ai }: { ai: 'content' | 'ads' | 'sales' }) {
+  return (
+    <div className="khung-muc mau-tim">
+      <h3 className="tieu-de-muc dau-muc">Chỉ đạo từ ④ AI Điều hành</h3>
+      <SoChiDao ai={ai} />
+    </div>
+  );
+}
+
 export function DieuHanhAi() {
   const { nao } = useKhoiNao();
+  const [lanTai, setLanTai] = useState(0);
   return (
     <KhuonAi
       ai="analytics"
       the={{
         'ket-qua': <KetQuaAi ai="analytics" them={<Analytics trongKhuon />} />,
         'dang-lam': nao ? (
-          <div className="khung-muc mau-tim">
-            <h3 className="tieu-de-muc dau-muc">Chẩn đoán & đề xuất cho 3 AI nhân viên</h3>
-            <DieuHanhThu trangId={nao.trang_id} />
+          <div className="space-y-6">
+            <div className="khung-muc mau-tim">
+              <h3 className="tieu-de-muc dau-muc">Chỉ đạo đang gửi cho 3 AI nhân viên</h3>
+              <div key={lanTai}><SoChiDao choThem /></div>
+            </div>
+            <div className="khung-muc mau-xanh">
+              <h3 className="tieu-de-muc dau-muc">Chẩn đoán & đề xuất</h3>
+              <DieuHanhThu trangId={nao.trang_id} onDaDoi={() => setLanTai((n) => n + 1)} />
+            </div>
           </div>
         ) : null,
-        'huong-dan': <HuongDanAi ai="analytics" />,
+        'huong-dan': (
+          <HuongDanAi
+            ai="analytics"
+            them={
+              <div className="khung-muc mau-xanh">
+                <h3 className="tieu-de-muc dau-muc">Lịch điều hành hằng ngày</h3>
+                <LichDieuHanhForm />
+              </div>
+            }
+          />
+        ),
         'nhat-ky': <NhatKyAi ai="analytics" />,
       }}
     />

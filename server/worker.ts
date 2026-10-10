@@ -17,6 +17,7 @@ import { doiChieuLuotAi } from "./services/so-ai.js";
 import { chayChoKenh } from "./services/ngu-canh-trang.js";
 import { ghiKenhTheoNgay } from "./services/trang.js";
 import { chupSoBaiNgay } from "./services/so-lieu-kenh.js";
+import { runDueDieuHanhNgay } from "./services/dieu-hanh-ngay.js";
 
 /**
  * Worker xử lý hàng đợi sự kiện.
@@ -59,6 +60,9 @@ let lanSoatBaiCuoi = 0;
 let lanVideoCuoi = 0;
 let dangXuLyVideo = false;
 let lanChiPhiCuoi = 0;
+/** Nhịp ngày của AI điều hành: quét 5 phút/lần xem khối não nào tới giờ báo cáo (mỗi trang một lần mỗi ngày). */
+const DIEU_HANH_INTERVAL_MS = 5 * 60_000;
+let lanDieuHanhCuoi = 0;
 /** Soát chi phí bên thứ ba mỗi giờ: tiền AI sắp hết, tiêu bất thường, nhà cung cấp tạm dừng. */
 const CHI_PHI_INTERVAL_MS = 60 * 60_000;
 /** Tra lại từng lượt AI với nhà cung cấp (họ chốt số chậm vài phút). */
@@ -525,6 +529,20 @@ export function startWorker(): void {
           .finally(() => {
             dangDoiChieu = false;
           });
+      }
+
+      /*
+       * AI điều hành — nhịp hằng ngày của từng khối não (services/dieu-hanh-ngay.ts): đo lại chỉ đạo, báo cáo ngày,
+       * tự chẩn đoán nếu chủ shop bật (có trần tiền). Hạn giờ dài hơn vì một lượt chẩn đoán gọi AI vài lần.
+       */
+      if (Date.now() - lanDieuHanhCuoi >= DIEU_HANH_INTERVAL_MS) {
+        lanDieuHanhCuoi = Date.now();
+        try {
+          const so = await coHanGio("điều hành hằng ngày", runDueDieuHanhNgay(), 5 * HAN_MOI_VIEC_MS);
+          if (so > 0) console.log(`[điều hành] Đã chạy nhịp ngày cho ${so} khối não.`);
+        } catch (error) {
+          console.error("[điều hành] Lỗi nhịp ngày:", error instanceof Error ? error.message : error);
+        }
       }
 
       if (Date.now() - lanChiPhiCuoi >= CHI_PHI_INTERVAL_MS) {

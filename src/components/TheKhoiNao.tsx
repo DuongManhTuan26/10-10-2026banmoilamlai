@@ -48,7 +48,7 @@ export function HuongDanAi({ ai, them }: { ai: MaAi; them?: ReactNode }) {
 
 const TEN_BANG: Record<string, string> = {
   ai_configs: 'Cài đặt AI', ai_documents: 'Tài liệu', handoff_rules: 'Luật nhường người', guardrail_configs: 'Hàng rào an toàn',
-  auto_scripts: 'Kịch bản bình luận', social_accounts: 'Kênh', quang_cao_chien_dich: 'Chiến dịch quảng cáo',
+  auto_scripts: 'Kịch bản bình luận', social_accounts: 'Kênh', chi_dao_ai: 'Chỉ đạo của AI điều hành', quang_cao_chien_dich: 'Chiến dịch quảng cáo',
   quang_cao_nhom: 'Nhóm quảng cáo', quang_cao_day_bai: 'Đẩy bài', quang_cao_doi_tuong: 'Tệp đối tượng',
 };
 const TEN_NGUON: Record<string, string> = { nguoi_dung: 'Người dùng', he_thong: 'Hệ thống', ai_dieu_hanh: 'AI điều hành' };

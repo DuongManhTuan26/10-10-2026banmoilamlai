@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { chiDaoChoAi } from "../services/chi-dao.js";
 import { query, queryOne } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { naoCua } from "../khoi-nao.js";
@@ -625,6 +626,8 @@ adsRouter.post(
             (config?.system_prompt ??
               "Bạn là chuyên gia quảng cáo Facebook, phân tích bằng tiếng Việt.") +
             knowledge +
+            // Chỉ đạo của AI điều hành đã được chủ shop duyệt (server/services/chi-dao.ts).
+            (await chiDaoChoAi(naoCua(req).trangId, "ads")) +
             "\n\nChỉ dựa vào số liệu được cung cấp, tuyệt đối không bịa số. Đánh giá quảng cáo theo ĐƠN HÀNG THẬT và tiền bỏ " +
             "ra mỗi đơn trước, số nền tảng tự báo (nhấp, tiếp cận) chỉ là phụ. Danh sách chiến dịch bị rút gọn thì nói rõ. " +
             DAN_KHONG_MARKDOWN +

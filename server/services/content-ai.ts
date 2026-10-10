@@ -7,6 +7,7 @@
  * tự viết lúc 8 giờ sáng đọc lên phải giống hệt bài chủ shop bấm viết tay.
  */
 
+import { chiDaoChoAi } from "./chi-dao.js";
 import { query, queryOne } from "../db.js";
 import { chatJson, asRecord, stringArray } from "./ai.js";
 import { boMarkdown, DAN_KHONG_MARKDOWN } from "./text.js";
@@ -96,6 +97,8 @@ export async function generatePostContent(params: {
         ]
       : []),
     knowledge,
+    // Chỉ đạo của AI điều hành đã được chủ shop duyệt (server/services/chi-dao.ts).
+    await chiDaoChoAi(params.trangId ?? null, "content"),
     khongLap,
     "",
     // Một bài: chủ dự án (03/10/2026) chỉ cần MỘT bài hiệu quả nhất, đổ thẳng vào ô nội dung.

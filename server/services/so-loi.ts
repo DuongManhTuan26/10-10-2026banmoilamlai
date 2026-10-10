@@ -108,7 +108,9 @@ export interface DongDeXuat {
 export async function deXuatGanDay(trangId: number, gioiHan = 10): Promise<DongDeXuat[]> {
   const { rows } = await query<DongDeXuat>(
     `SELECT id::int AS id, luc, van_de, ket_qua, ly_do, ket_luan, trang_thai, ly_do_chu_shop, so_luot_ai,
-            tien_usd::float AS tien_usd, thoi_gian_ms, noi_dung
+            tien_usd::float AS tien_usd, thoi_gian_ms, noi_dung,
+            -- Nhân viên mà các việc đề xuất nhắm tới — để giao diện gợi ý gửi chỉ đạo cho đúng AI khi duyệt.
+            COALESCE((SELECT array_agg(DISTINCT h ->> 'nhanVien') FROM jsonb_array_elements(quyet_dinh -> 'hanhDong') h), '{}') AS nhan_vien
        FROM de_xuat_dieu_hanh WHERE trang_id = $1 ORDER BY luc DESC LIMIT $2`,
     [trangId, gioiHan]
   );
