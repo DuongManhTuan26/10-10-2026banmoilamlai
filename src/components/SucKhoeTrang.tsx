@@ -23,7 +23,11 @@ function giaTri(c: ChiSoSucKhoe, v: number | null) {
   return v.toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
-export default function SucKhoeTrang({ trangId }: { trangId: number }) {
+/**
+ * `khau`: chỉ hiện chỉ số / sự cố của MỘT khâu — thẻ "Kết quả" của AI nội dung, quảng cáo, bán hàng dùng chung bảng này
+ * (một nguồn, một cách chấm). Không truyền = cả khối não (AI điều hành).
+ */
+export default function SucKhoeTrang({ trangId, khau }: { trangId: number; khau?: ChiSoSucKhoe['khau'] }) {
   const [du, setDu] = useState<DuLieu | null>(null);
   const [loi, setLoi] = useState('');
   useEffect(() => {
@@ -42,25 +46,29 @@ export default function SucKhoeTrang({ trangId }: { trangId: number }) {
   if (loi) return <p className="text-sm text-red-400">{loi}</p>;
   if (!du) return <p className="text-sm text-on-surface-variant">Đang chấm sức khoẻ…</p>;
   const theoMa = new Map<string, ChiSoSucKhoe>(du.chiSo.map((c) => [c.ma, c]));
+  const chiSo = khau ? du.chiSo.filter((c) => c.khau === khau) : du.chiSo;
+  const suCo = khau ? du.suCo.filter((x) => x.khau === khau) : du.suCo;
+  const uuTien = du.uuTien.filter((m) => !khau || theoMa.get(m)?.khau === khau);
+  const baoVe = du.baoVe.filter((m) => !khau || theoMa.get(m)?.khau === khau);
 
   return (
     <div className="space-y-3">
-      {du.suCo.length > 0 && (
+      {suCo.length > 0 && (
         <div className="rounded-xl border border-orange-400/40 bg-orange-400/10 px-4 py-2.5 text-sm">
           <div className="font-bold text-orange-400 mb-1">Sự cố — xử lý trước</div>
-          {du.suCo.map((s, i) => (
+          {suCo.map((s, i) => (
             <div key={i} className="text-on-surface">
               {s.ten} <span className="text-on-surface-variant">· {s.chiTiet}</span>
             </div>
           ))}
         </div>
       )}
-      {(du.uuTien.length > 0 || du.baoVe.length > 0) && (
+      {(uuTien.length > 0 || baoVe.length > 0) && (
         <div className="grid gap-2 md:grid-cols-2 text-sm">
-          {du.uuTien.length > 0 && (
+          {uuTien.length > 0 && (
             <div className="rounded-xl border border-outline-variant bg-surface px-4 py-2.5">
               <div className="font-bold text-red-400 mb-1">Cần xử lý (theo thứ tự)</div>
-              {du.uuTien.map((m, i) => (
+              {uuTien.map((m, i) => (
                 <div key={m} className="text-on-surface">
                   {i + 1}. {theoMa.get(m)?.ten}
                   {theoMa.get(m)?.anhHuongTuan ? (
@@ -70,10 +78,10 @@ export default function SucKhoeTrang({ trangId }: { trangId: number }) {
               ))}
             </div>
           )}
-          {du.baoVe.length > 0 && (
+          {baoVe.length > 0 && (
             <div className="rounded-xl border border-outline-variant bg-surface px-4 py-2.5">
               <div className="font-bold text-green-400 mb-1">Đang mạnh — giữ nguyên, không đụng vào</div>
-              {du.baoVe.map((m) => (
+              {baoVe.map((m) => (
                 <div key={m} className="text-on-surface">{theoMa.get(m)?.ten}</div>
               ))}
             </div>
@@ -81,7 +89,8 @@ export default function SucKhoeTrang({ trangId }: { trangId: number }) {
         </div>
       )}
       <div className="divide-y divide-outline-variant/60 rounded-xl border border-outline-variant bg-surface text-sm">
-        {du.chiSo.map((c) => {
+        {chiSo.length === 0 && <div className="px-4 py-3 text-on-surface-variant">Khâu này chưa có chỉ số nào đo được.</div>}
+        {chiSo.map((c) => {
           const n = NHAN_MUC[c.muc];
           return (
             <div key={c.ma} className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">

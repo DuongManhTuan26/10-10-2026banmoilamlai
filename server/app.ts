@@ -19,6 +19,7 @@ import { analyticsRouter } from "./routes/analytics.js";
 import { hoanDiaChiKho, laDiaChiKho } from "./services/media-proxy.js";
 import { adminRouter } from "./routes/admin.js";
 import { quanLyRouter } from "./routes/quan-ly.js";
+import { khoiNaoRouter } from "./routes/khoi-nao.js";
 import { chayChoTrang } from "./services/ngu-canh-trang.js";
 import { ganKhoiNao } from "./khoi-nao.js";
 
@@ -173,6 +174,8 @@ export async function createApp() {
   // Quản trị hệ thống. Tự chặn người không phải quản trị ngay trong router.
   app.use("/api/admin", adminRouter);
   app.use("/api/quan-ly", quanLyRouter);
+  // Danh sách khối não được mở + nhật ký từng AI (docs/khoi-nao.md).
+  app.use("/api/khoi-nao", khoiNaoRouter);
 
   // Bất kỳ đường dẫn /api nào không khớp đều trả JSON, không trả trang HTML.
   app.use("/api", (_req, res) => {

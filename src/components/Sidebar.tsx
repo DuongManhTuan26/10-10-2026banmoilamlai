@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { useActivePage, PLATFORM_BADGE } from '../lib/ActivePage';
+import { useKhoiNao } from '../lib/ActivePage';
+import ChonKhoiNao from './ChonKhoiNao';
+import { BON_AI } from '../lib/bon-ai';
 
 /**
  * Địa chỉ trợ giúp của CHÍNH mình.
@@ -51,9 +53,8 @@ export default function Sidebar({
    */
   laChuChuoi?: boolean;
 }) {
-  const navigate = useNavigate();
   const viTri = useLocation();
-  const { accounts, activeAccount, activeAccountId, setActiveAccountId } = useActivePage();
+  const { nao } = useKhoiNao();
 
   /*
    * Chọn một mục là đóng ngăn kéo.
@@ -62,52 +63,41 @@ export default function Sidebar({
    * nhìn thấy cái menu phủ kín màn hình, tưởng là bấm không ăn.
    */
   useEffect(() => { onDong?.(); }, [viTri.pathname]);
-  const [pageMenuOpen, setPageMenuOpen] = useState(false);
 
   /*
-   * Chủ chuỗi chỉ thấy phần quản lý.
+   * MENU THEO KHỐI NÃO (chủ dự án chốt 10/10/2026 — docs/khoi-nao.md).
    *
-   * Họ không gắn Fanpage, không có hộp thư, không có đơn hàng — những thứ đó
-   * thuộc về từng tài khoản trang bên dưới. Bày ra cho họ một Hộp Thư luôn
-   * rỗng và một AI Bán Hàng không có Trang nào để huấn luyện thì chỉ làm họ
-   * tưởng hệ thống hỏng.
+   *   [Trang bán hàng ▾]          ← bộ chọn DUY NHẤT
+   *   KHỐI NÃO AI                 ← 4 AI cố định, liền mạch, luôn đi cùng nhau
+   *     Tổng quan khối não
+   *     ① AI Nội dung · ② AI Quảng cáo · ③ AI Bán hàng · ④ AI Điều hành
+   *   DỮ LIỆU CỦA TRANG           ← thứ thay đổi được để điều hướng AI
+   *   QUẢN LÝ                     ← chủ chuỗi / quản trị
    *
-   * Không xoá màn hình nào: các mục này vẫn nguyên vẹn cho tài khoản trang, và
-   * chủ chuỗi thấy lại đầy đủ ngay khi bấm "Mở trang" bước vào một trang.
+   * Chưa có trang nào (vd. chủ chuỗi chưa lập trang) thì không bày khối não rỗng — chỉ phần quản lý.
    */
-  const group1 = laChuChuoi
-    ? []
-    : [
-        { name: 'Bảng Điều Khiển', icon: 'dashboard', path: '/' },
-        { name: 'Kết Nối Đa Nền Tảng', icon: 'cable', path: '/connections' },
-      ];
-  
-  const group2 = laChuChuoi
-    ? []
-    : [
-        { name: 'AI Viết - Đăng Bài', icon: 'post_add', path: '/content' },
-        { name: 'AI Quảng Cáo', icon: 'campaign', path: '/ads' },
-        { name: 'AI Bán Hàng', icon: 'smart_toy', path: '/auto-scripts' },
-        { name: 'AI Thống Kê - Phân Tích', icon: 'insights', path: '/analytics' },
-      ];
-  
-  const group3 = [
-    ...(laChuChuoi
-      ? []
-      : [
-          { name: 'Hộp Thư', icon: 'forum', path: '/inbox' },
-          { name: 'Đơn Hàng', icon: 'receipt_long', path: '/orders' },
-          { name: 'Báo Cáo Telegram', icon: 'notifications_active', path: '/telegram' },
-        ]),
-    { name: 'Gói Dịch Vụ', icon: 'workspace_premium', path: '/pricing' },
+  const coNao = !!nao;
+  const nhomNao = coNao
+    ? [
+        { name: 'Tổng quan khối não', icon: 'hub', path: '/' },
+        ...BON_AI.map((a) => ({ name: a.ten, icon: a.bieuTuong, path: a.duong, so: a.so, mau: a.hex })),
+      ]
+    : [];
+  const nhomDuLieu = coNao
+    ? [
+        { name: 'Kết nối kênh', icon: 'cable', path: '/ket-noi' },
+        { name: 'Báo cáo Telegram', icon: 'notifications_active', path: '/telegram' },
+      ]
+    : [];
+  const nhomQuanLy = [
     // Cùng tên, cùng biểu tượng ở cả hai tầng — một màn hình quản lý dùng chung (chỉ khác phạm vi).
-    ...(laChuChuoi
-      ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/quan-ly-trang' }]
-      : []),
-    ...(laQuanTri
-      ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/admin' }]
-      : []),
+    ...(laChuChuoi ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/quan-ly-trang' }] : []),
+    ...(laQuanTri ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/admin' }] : []),
+    { name: 'Gói Dịch Vụ', icon: 'workspace_premium', path: '/pricing' },
   ];
+  const nhan = (chu: string) => (
+    <div className="px-3 pb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#E8EDF2]/50">{chu}</div>
+  );
 
   const renderNavGroup = (items: any[]) => (
     <div className="flex flex-col relative" style={{ gap: '8px' }}>
@@ -146,6 +136,15 @@ export default function Sidebar({
                 <div className="absolute left-0 top-[15%] bottom-[15%] w-[3px] bg-[#00e5ff] rounded-r-md shadow-[0_0_15px_#00e5ff,0_0_5px_#ffffff] z-20"></div>
               )}
 
+              {/* Số thứ tự + màu riêng của từng AI trong khối não (src/lib/bon-ai.ts). */}
+              {item.so && (
+                <span
+                  className="relative z-10 w-5 h-5 shrink-0 rounded-md flex items-center justify-center font-mono text-[11px] font-black"
+                  style={{ color: item.mau, border: `1px solid ${item.mau}80`, background: `${item.mau}1a` }}
+                >
+                  {item.so}
+                </span>
+              )}
               {/* Icon */}
               <span 
                 className="material-symbols-outlined relative z-10 transition-all duration-300 flex items-center justify-center w-6" 
@@ -219,92 +218,24 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/*
-          Bộ chọn Fanpage.
-
-          Chủ chuỗi không có Fanpage nào của riêng mình — Fanpage thuộc về từng
-          tài khoản trang. Với họ, bộ chọn này luôn hiện "Chưa có trang nào",
-          trái ngược hẳn với bảng Quản lý trang đang liệt kê đủ trang của họ,
-          nên phải ẩn đi để không mâu thuẫn trên cùng một màn hình.
-        */}
-        {!laChuChuoi && (
-        <div className="shrink-0 relative" style={{ marginBottom: '24px' }}>
-          <button
-            onClick={() => setPageMenuOpen((open) => !open)}
-            className="w-full flex items-center justify-between py-2.5 px-3 rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-md hover:border-[#00e5ff]/40 hover:bg-[#00e5ff]/5 hover:shadow-[0_0_20px_rgba(0,229,255,0.1)] transition-all duration-300 group"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-surface-container to-surface flex items-center justify-center border border-white/10 font-mono text-[10px] text-white font-bold shrink-0 shadow-inner">
-                {activeAccount ? (PLATFORM_BADGE[activeAccount.platform] ?? 'FP') : 'FP'}
+        <nav className="flex flex-col min-h-0 overflow-y-auto no-scrollbar">
+          {coNao || laChuChuoi || laQuanTri ? <ChonKhoiNao /> : null}
+          {coNao && (
+            <>
+              <div style={{ height: '20px', flexShrink: 0 }}></div>
+              {nhan('Khối não AI')}
+              {/* Viền bao trọn 4 AI: một khối liền mạch, không tách rời. */}
+              <div className="rounded-2xl border border-[#00e5ff]/20 p-1.5 shrink-0" style={{ background: 'rgba(0,229,255,0.03)' }}>
+                {renderNavGroup(nhomNao)}
               </div>
-              <span className="font-body-md text-[14px] text-[#E8EDF2] group-hover:text-white transition-colors text-left truncate font-semibold tracking-wide">
-                {activeAccount ? activeAccount.display_name : accounts.length ? 'Tất cả trang' : 'Chưa có trang nào'}
-              </span>
-            </div>
-            <div className="flex flex-col -space-y-1 shrink-0">
-              <span className="material-symbols-outlined text-[#E8EDF2] group-hover:text-[#00e5ff] transition-colors text-[16px] leading-none">keyboard_arrow_up</span>
-              <span className="material-symbols-outlined text-[#E8EDF2] group-hover:text-[#00e5ff] transition-colors text-[16px] leading-none">keyboard_arrow_down</span>
-            </div>
-          </button>
-
-          {pageMenuOpen && (
-            <div className="absolute left-0 right-0 top-full mt-2 z-40 rounded-xl border border-outline-variant bg-noi backdrop-blur-xl shadow-[0_0_24px_rgba(0,229,255,0.15)] overflow-hidden">
-              <button
-                onClick={() => { setActiveAccountId(null); setPageMenuOpen(false); }}
-                className={clsx(
-                  'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#00e5ff]/10',
-                  !activeAccountId && 'bg-[#00e5ff]/10'
-                )}
-              >
-                <div className="w-6 h-6 rounded-lg border border-white/10 flex items-center justify-center font-mono text-[10px] text-white shrink-0">ALL</div>
-                <span className={clsx('text-[13px] font-semibold truncate', !activeAccountId ? 'text-[#00e5ff]' : 'text-[#E8EDF2]')}>
-                  Tất cả trang
-                </span>
-              </button>
-
-              {accounts.map((account) => (
-                <button
-                  key={account.id}
-                  onClick={() => { setActiveAccountId(account.id); setPageMenuOpen(false); }}
-                  className={clsx(
-                    'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#00e5ff]/10',
-                    account.id === activeAccountId && 'bg-[#00e5ff]/10'
-                  )}
-                >
-                  <div className="w-6 h-6 rounded-lg border border-white/10 flex items-center justify-center font-mono text-[10px] text-white shrink-0 overflow-hidden">
-                    {account.profile_picture
-                      ? <img src={account.profile_picture} alt="" className="w-full h-full object-cover"/>
-                      : (PLATFORM_BADGE[account.platform] ?? '?')}
-                  </div>
-                  <span className={clsx('text-[13px] font-semibold truncate flex-1', account.id === activeAccountId ? 'text-[#00e5ff]' : 'text-[#E8EDF2]')}>
-                    {account.display_name || account.username}
-                  </span>
-                  {!account.connected && (
-                    <span className="text-[10px] text-[#ef4444] font-bold shrink-0">MẤT KẾT NỐI</span>
-                  )}
-                </button>
-              ))}
-
-              {accounts.length === 0 && (
-                <button
-                  onClick={() => { setPageMenuOpen(false); navigate('/connections'); }}
-                  className="w-full px-3 py-3 text-left text-[13px] text-[#00e5ff] font-semibold hover:bg-[#00e5ff]/10 transition-colors"
-                >
-                  + Kết nối trang đầu tiên
-                </button>
-              )}
-            </div>
+              <div style={{ height: '20px', flexShrink: 0 }}></div>
+              {nhan('Dữ liệu của trang')}
+              {renderNavGroup(nhomDuLieu)}
+            </>
           )}
-        </div>
-        )}
-
-        {/* Main Nav */}
-        <nav className="flex flex-col shrink-0">
-          {renderNavGroup(group1)}
-          <div style={{ height: '28px', flexShrink: 0 }}></div>
-          {renderNavGroup(group2)}
-          <div style={{ height: '28px', flexShrink: 0 }}></div>
-          {renderNavGroup(group3)}
+          <div style={{ height: '20px', flexShrink: 0 }}></div>
+          {nhan('Quản lý')}
+          {renderNavGroup(nhomQuanLy)}
         </nav>
 
         {/* Spacer */}

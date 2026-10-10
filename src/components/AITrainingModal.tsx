@@ -15,6 +15,11 @@ export type AiKind = 'content' | 'ads' | 'sales' | 'analytics';
 interface AITrainingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Hiện thẳng trong thẻ "Hướng dẫn AI" của khuôn khối não (KhuonAi) thay vì hộp thoại. Cùng một biểu mẫu, cùng một
+   * đường lưu — không có bản thứ hai.
+   */
+  noiTuyen?: boolean;
   aiName: string;
   /**
    * AI nào đang được đặt vai trò.
@@ -29,7 +34,7 @@ interface AITrainingModalProps {
 
 
 export default function AITrainingModal({
-  isOpen, onClose, aiName, kind, onSaved,
+  isOpen, onClose, aiName, kind, onSaved, noiTuyen = false,
 }: AITrainingModalProps) {
   const { activeAccountId, activeTrangId } = useActivePage();
   const [role, setRole] = useState('');
@@ -161,30 +166,19 @@ export default function AITrainingModal({
     }
   };
 
-  return (
-    <HopThoai
-      bieuTuong="badge"
-      tieuDe={`Vai trò: ${aiName}`}
-      phuDe="Cấu hình vai trò và nguồn kiến thức riêng cho AI này"
-      onDong={onClose}
-      dongKhiBamNgoai={false}
-      chan={
-        <>
-          <button type="button" onClick={onClose} className={NUT_PHU}>
-            Huỷ
-          </button>
-          <button type="button" onClick={handleSave} disabled={dangLuu || dangTai} className={NUT_CHINH}>
-            <span className={clsx("material-symbols-outlined text-[20px]", dangLuu && "animate-spin")}>
-              {dangLuu ? 'progress_activity' : 'save'}
-            </span>
-            {dangLuu ? 'Đang lưu…' : 'Lưu cấu hình AI'}
-          </button>
-        </>
-      }
-    >
+  const nutLuu = (
+    <button type="button" onClick={handleSave} disabled={dangLuu || dangTai} className={NUT_CHINH}>
+      <span className={clsx("material-symbols-outlined text-[20px]", dangLuu && "animate-spin")}>
+        {dangLuu ? 'progress_activity' : 'save'}
+      </span>
+      {dangLuu ? 'Đang lưu…' : 'Lưu cấu hình AI'}
+    </button>
+  );
+  const thanBieuMau = (
         <div className="space-y-6">
           {/* Vai trò và tài liệu của AI này thuộc về Trang đang chọn, không dùng chung. */}
-          <TrangDangHuanLuyen />
+          {/* Trong khuôn khối não thì đầu khuôn đã ghi rõ trang — không lặp. */}
+          {!noiTuyen && <TrangDangHuanLuyen />}
           {loi && (
             <div className="flex items-start gap-3 text-sm text-error bg-error/10 border border-error/30 rounded-xl px-4 py-3">
               <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
@@ -339,6 +333,35 @@ export default function AITrainingModal({
             )}
           </div>
         </div>
+  );
+
+  if (noiTuyen) {
+    return (
+      <div className="space-y-5">
+        {thanBieuMau}
+        <div className="flex justify-end">{nutLuu}</div>
+      </div>
+    );
+  }
+
+  return (
+    <HopThoai
+      bieuTuong="badge"
+      tieuDe={`Vai trò: ${aiName}`}
+      phuDe="Cấu hình vai trò và nguồn kiến thức riêng cho AI này"
+      onDong={onClose}
+      dongKhiBamNgoai={false}
+      chan={
+        <>
+          <button type="button" onClick={onClose} className={NUT_PHU}>
+            Huỷ
+          </button>
+          {nutLuu}
+        </>
+      }
+    >
+      {thanBieuMau}
     </HopThoai>
   );
 }
+

@@ -67,7 +67,11 @@ function compact(value: number): string {
   return String(Math.round(value));
 }
 
-export default function Ads() {
+/**
+ * `trongKhuon`: trang đang nằm trong khuôn khối não (KhuonAi) — đầu khuôn đã có tên AI, trang khối não và thẻ
+ * "Hướng dẫn AI", nên ẩn tiêu đề và nút vai trò riêng của trang để không lặp hai lần.
+ */
+export default function Ads({ trongKhuon = false }: { trongKhuon?: boolean } = {}) {
   const [filter, setFilter] = useState('Tất cả');
   const [isFlowOpen, setIsFlowOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -633,7 +637,7 @@ export default function Ads() {
   };
 
   return (
-    <main className="flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative">
+    <main className={trongKhuon ? "w-full relative" : "flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative"}>
 
       <BangLoi noiDung={errorMessage} onDong={() => setErrorMessage('')} className="mb-6" />
 
@@ -641,7 +645,7 @@ export default function Ads() {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">AI Quảng Cáo</h1>
+            {!trongKhuon && <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">AI Quảng Cáo</h1>}
             <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase">
               {connected ? `${soChienDichDangChay} CHIẾN DỊCH ĐANG CHẠY` : 'CHƯA NỐI TÀI KHOẢN QUẢNG CÁO'}
             </span>
@@ -680,6 +684,7 @@ export default function Ads() {
         </div>
         <div className="flex items-center gap-3">
           <button 
+            hidden={trongKhuon}
             onClick={() => setIsTrainingOpen(true)}
             className="px-4 py-2 bg-surface-container text-primary border border-primary/30 font-bold rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2"
           >

@@ -11,7 +11,8 @@ import { api, ApiError, formatCurrency } from '../lib/api';
 
 const COLORS = ['#00e5ff', '#d946ef', '#f59e0b', '#3b82f6', '#10b981', '#ef4444'];
 
-export default function Analytics() {
+/** `trongKhuon`: nằm trong thẻ "Kết quả" của AI điều hành (KhuonAi) — ẩn tiêu đề và nút vai trò riêng. */
+export default function Analytics({ trongKhuon = false }: { trongKhuon?: boolean } = {}) {
   const [timeRange, setTimeRange] = useState('7days');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -120,16 +121,17 @@ export default function Analytics() {
 
   return (
     <main className="flex-1 w-full relative text-on-surface">
-      <div className="pt-8 pb-8 px-margin max-w-[1600px] mx-auto w-full">
+      <div className={trongKhuon ? "w-full" : "pt-8 pb-8 px-margin max-w-[1600px] mx-auto w-full"}>
         
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-lg">
           <div>
-            <h2 className="text-on-surface-variant font-body-lg">AI Thống Kê - Phân Tích</h2>
-            <p className="text-sm font-medium text-on-surface-variant mt-1">Đánh giá hiệu suất tổng thể và nhận đề xuất từ AI</p>
+            <h2 className="text-on-surface-variant font-body-lg">{trongKhuon ? 'Số liệu tổng của trang' : 'AI Thống Kê - Phân Tích'}</h2>
+            <p className="text-sm font-medium text-on-surface-variant mt-1">Doanh thu, đơn, hội thoại theo ngày — và bản nhận xét nhanh của AI</p>
           </div>
           <div className="flex items-center gap-3">
             <button 
+              hidden={trongKhuon}
               onClick={() => setIsTrainingOpen(true)}
               className="px-4 py-2 bg-surface-container text-primary border border-primary/30 font-bold rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2"
             >

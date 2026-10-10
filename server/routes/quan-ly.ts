@@ -49,6 +49,7 @@ import {
 import * as zernio from "../services/zernio.js";
 import { hashPassword } from "../auth.js";
 
+import { moKhoiNao } from "../khoi-nao.js";
 export const quanLyRouter = Router();
 
 quanLyRouter.use(requireAuth);
@@ -247,22 +248,14 @@ quanLyRouter.get(
 );
 
 /**
- * Trang mà người đang đăng nhập được xem báo cáo: quản trị tổng — mọi trang; admin con — chỉ trang thuộc chuỗi mình.
- * Không thuộc → 404 (không xác nhận trang có tồn tại). MỘT hàm cho mọi đường báo cáo trang — chép mỗi đường một bản
- * thì sửa một bên quên bên kia.
+ * Trang mà người đang đăng nhập được mở báo cáo / AI điều hành — ĐÚNG luật mở khối não (server/khoi-nao.ts): trang của
+ * chính mình · trang thuộc tài khoản con của chủ chuỗi · quản trị tổng. Chủ shop xem được khối não của chính mình (AI điều
+ * hành là một phần của khối não, không phải đặc quyền quản lý). Không thuộc → 404 (không xác nhận trang có tồn tại).
  */
 async function trangTrongPhamVi(user: { id: number; role: string }, giaTri: unknown): Promise<number> {
-  if (user.role !== "admin" && user.role !== "admin_con") throw new AppError("Phần này dành cho tài khoản quản lý", 403);
-  const trangId = Number(giaTri);
-  const thuoc = Number.isSafeInteger(trangId)
-    ? await queryOne(
-        `SELECT t.id FROM trang t JOIN users u ON u.id = t.user_id
-          WHERE t.id = $1 AND ($2::bigint IS NULL OR u.id = $2 OR u.parent_id = $2)`,
-        [trangId, user.role === "admin" ? null : user.id]
-      )
-    : null;
-  if (!thuoc) throw new AppError("Không tìm thấy trang này", 404);
-  return trangId;
+  const nao = await moKhoiNao(user, Number(giaTri));
+  if (!nao) throw new AppError("Không tìm thấy trang này", 404);
+  return nao.trangId;
 }
 
 /**

@@ -42,7 +42,11 @@ interface DisplayOrder {
   conversationId: string | null;
 }
 
-export default function Orders() {
+/**
+ * `trongKhuon`: trang đang nằm trong khuôn khối não (KhuonAi) — đầu khuôn đã có tên AI, trang khối não và thẻ
+ * "Hướng dẫn AI", nên ẩn tiêu đề và nút vai trò riêng của trang để không lặp hai lần.
+ */
+export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } = {}) {
   const navigate = useNavigate();
 
   const [activeFilters, setActiveFilters] = useState<string[]>(['Tất cả']);
@@ -242,7 +246,7 @@ export default function Orders() {
   };
 
   return (
-    <main className="flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative">
+    <main className={trongKhuon ? "w-full relative" : "flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative"}>
 
       <BangLoi noiDung={errorMessage} onDong={() => setErrorMessage('')} className="mb-6" />
 
@@ -266,7 +270,7 @@ export default function Orders() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">Đơn hàng</h1>
+            {!trongKhuon && <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">Đơn hàng</h1>}
             <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase">
               {ordersToday} ĐƠN HÔM NAY
             </span>

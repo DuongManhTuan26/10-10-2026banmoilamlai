@@ -1,26 +1,20 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import TopNavBar from './components/TopNavBar';
 import ErrorBoundary from './components/ErrorBoundary';
-import Dashboard from './pages/Dashboard';
-import Inbox from './pages/Inbox';
-import Orders from './pages/Orders';
-import Content from './pages/Content';
-import Ads from './pages/Ads';
-import AutoScripts from './pages/AutoScripts';
+import { TongQuanKhoiNao, NoiDungAi, QuangCaoAi, BanHangAi, DieuHanhAi } from './pages/KhoiNao';
 import TelegramAlerts from './pages/TelegramAlerts';
 import Connections from './pages/Connections';
 import Pricing from './pages/Pricing';
 // Một màn hình quản lý dùng chung cho quản trị tổng và chủ chuỗi (chủ dự án 04/10/2026: giống 100%, chỉ khác phạm vi).
 import QuanLy from './pages/QuanLy';
 import DangXemThay from './components/DangXemThay';
-import Analytics from './pages/Analytics';
 import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import SetupComplete from './pages/SetupComplete';
 import { api, ApiError, type User } from './lib/api';
-import { ActivePageProvider } from './lib/ActivePage';
+import { ActivePageProvider, useKhoiNao } from './lib/ActivePage';
 
 type AppState = 'loading' | 'auth' | 'onboarding' | 'setup_complete' | 'main';
 
@@ -192,37 +186,56 @@ export default function App() {
             Không màn hình nào bị xoá: chủ chuỗi thấy lại đầy đủ ngay khi bấm
             "Mở trang" bước vào một trang.
           */}
-          {user?.role === 'admin_con' ? (
-            <Routes>
-              <Route path="/quan-ly-trang" element={<QuanLy user={user} />} />
-              <Route path="/pricing" element={<Pricing />} />
-              <Route path="*" element={<Navigate to="/quan-ly-trang" replace />} />
-            </Routes>
-          ) : (
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/inbox" element={<Inbox />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/content" element={<Content />} />
-            <Route path="/auto-scripts" element={<AutoScripts />} />
-            <Route path="/ads" element={<Ads />} />
-            <Route path="/telegram" element={<TelegramAlerts />} />
-            <Route path="/connections" element={<Connections />} />
-            <Route path="/pricing" element={<Pricing />} />
-            {/*
-              Chỉ quản trị mới có đường vào. Đây CHỈ là lớp che mắt — máy chủ
-              vẫn kiểm lại vai trò từ database ở mọi lời gọi.
-            */}
-            {user?.role === 'admin' && <Route path="/admin" element={<QuanLy user={user} />} />}
-            {user?.role === 'admin' && <Route path="/quan-ly" element={<Navigate to="/admin" replace />} />}
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          )}
+          <TuyenKhoiNao user={user} />
           </ErrorBoundary>
         </main>
       </div>
     </div>
     </ActivePageProvider>
+  );
+}
+
+/** Chuyển đường cũ sang đường mới, GIỮ tham số (luồng nối Fanpage quay về /connections?connect=… vẫn chạy). */
+function ChuyenHuong({ den, them }: { den: string; them?: Record<string, string> }) {
+  const viTri = useLocation();
+  const p = new URLSearchParams(viTri.search);
+  for (const [k, v] of Object.entries(them ?? {})) if (!p.has(k)) p.set(k, v);
+  const q = p.toString();
+  return <Navigate to={`${den}${q ? `?${q}` : ''}`} replace />;
+}
+
+/**
+ * Đường dẫn theo KHỐI NÃO (docs/khoi-nao.md) — một bộ cho mọi vai trò; chỉ khác phần quản lý (chủ chuỗi / quản trị).
+ * `key` = trang đang chọn: đổi trang bán hàng là mọi màn hình nạp lại từ đầu cho khối não mới, không màn hình nào giữ
+ * dữ liệu của trang cũ.
+ */
+function TuyenKhoiNao({ user }: { user: User | null }) {
+  const { nao } = useKhoiNao();
+  return (
+    <div key={nao?.trang_id ?? 'chua-co'} className="contents">
+    <Routes>
+      <Route path="/" element={<TongQuanKhoiNao />} />
+      <Route path="/noi-dung" element={<NoiDungAi />} />
+      <Route path="/quang-cao" element={<QuangCaoAi />} />
+      <Route path="/ban-hang" element={<BanHangAi />} />
+      <Route path="/dieu-hanh" element={<DieuHanhAi />} />
+      <Route path="/ket-noi" element={<Connections />} />
+      <Route path="/telegram" element={<TelegramAlerts />} />
+      <Route path="/pricing" element={<Pricing />} />
+      {/* Quản lý: một màn hình dùng chung hai tầng, chỉ khác phạm vi. Máy chủ vẫn kiểm vai trò ở mọi lời gọi. */}
+      {user?.role === 'admin_con' && <Route path="/quan-ly-trang" element={<QuanLy user={user} />} />}
+      {user?.role === 'admin' && <Route path="/admin" element={<QuanLy user={user} />} />}
+      <Route path="/quan-ly" element={<Navigate to={user?.role === 'admin' ? '/admin' : '/quan-ly-trang'} replace />} />
+      {/* Đường cũ → đường mới của khối não. */}
+      <Route path="/content" element={<ChuyenHuong den="/noi-dung" them={{ the: 'dang-lam' }} />} />
+      <Route path="/ads" element={<ChuyenHuong den="/quang-cao" them={{ the: 'dang-lam' }} />} />
+      <Route path="/inbox" element={<ChuyenHuong den="/ban-hang" them={{ the: 'dang-lam', viec: 'hop-thu' }} />} />
+      <Route path="/orders" element={<ChuyenHuong den="/ban-hang" them={{ the: 'dang-lam', viec: 'don-hang' }} />} />
+      <Route path="/auto-scripts" element={<ChuyenHuong den="/ban-hang" them={{ the: 'huong-dan' }} />} />
+      <Route path="/analytics" element={<ChuyenHuong den="/dieu-hanh" />} />
+      <Route path="/connections" element={<ChuyenHuong den="/ket-noi" />} />
+      <Route path="*" element={<Navigate to={!nao && user?.role === 'admin_con' ? '/quan-ly-trang' : '/'} replace />} />
+    </Routes>
+    </div>
   );
 }

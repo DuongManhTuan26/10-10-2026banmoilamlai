@@ -36,7 +36,11 @@ const FILTER_TO_STATUS: Record<string, PostStatus> = {
  */
 const CAN_XU_LY: PostStatus[] = ['publishing', 'failed'];
 
-export default function Content() {
+/**
+ * `trongKhuon`: trang đang nằm trong thẻ "Đang làm" của khuôn khối não (KhuonAi) — đầu khuôn đã có tên AI, trang khối não
+ * và thẻ "Hướng dẫn AI", nên ẩn tiêu đề và nút vai trò riêng của trang để không lặp hai lần.
+ */
+export default function Content({ trongKhuon = false }: { trongKhuon?: boolean } = {}) {
   const { accounts, activeAccountId, activeTrangId } = useActivePage();
 
   const [activeFilter, setActiveFilter] = useState('Chờ duyệt (0)');
@@ -705,7 +709,7 @@ export default function Content() {
 
 
   return (
-    <main className="flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative">
+    <main className={trongKhuon ? "w-full relative" : "flex-1  p-6 md:p-8 max-w-7xl mx-auto w-full relative"}>
 
       {/* Lỗi của các thao tác ngoài hộp soạn bài: đăng lại, xoá, duyệt, tải danh sách. */}
       {errorMessage && !isComposerOpen && (
@@ -727,7 +731,7 @@ export default function Content() {
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">AI Viết - Đăng Bài</h1>
+            {!trongKhuon && <h1 className="font-headline-sm text-3xl font-bold text-on-surface tracking-tight">AI Viết - Đăng Bài</h1>}
             <span className="font-mono text-xs font-bold tracking-wider text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase">
               {activeCounts.pending} BÀI CHỜ DUYỆT
             </span>
@@ -736,6 +740,7 @@ export default function Content() {
         </div>
         <div className="flex items-center gap-3">
           <button 
+            hidden={trongKhuon}
             onClick={() => setIsTrainingOpen(true)}
             className="px-4 py-2 bg-surface-container text-primary border border-primary/30 font-bold rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-2"
           >

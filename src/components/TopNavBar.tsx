@@ -1,3 +1,4 @@
+import { BON_AI } from '../lib/bon-ai';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type User } from '../lib/api';
@@ -42,22 +43,19 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
     };
   }, [location.pathname]);
 
+  // Tiêu đề theo đường khối não (docs/khoi-nao.md). 4 AI lấy tên từ nguồn duy nhất src/lib/bon-ai.ts.
   const getPageTitle = () => {
+    const ai = BON_AI.find((a) => a.duong === location.pathname);
+    if (ai) return ai.ten;
     switch (location.pathname) {
-      case '/': return 'Bảng điều khiển';
-      case '/inbox': return 'Hộp thoại bán hàng';
-      case '/orders': return 'Đơn hàng';
-      case '/content': return 'Bài đăng';
-      case '/auto-scripts': return 'Kịch bản tự động';
-      case '/ads': return 'Quảng cáo';
-      case '/telegram': return 'Cảnh báo Telegram';
-      case '/connections': return 'Kết nối';
+      case '/': return 'Tổng quan khối não';
+      case '/ket-noi': return 'Kết nối kênh';
+      case '/telegram': return 'Báo cáo Telegram';
       case '/pricing': return 'Gói dịch vụ';
-      case '/settings': return 'Cài đặt';
       // Cùng một màn hình quản lý cho cả hai tầng — cùng tiêu đề.
       case '/quan-ly-trang': return 'Quản lý tài khoản';
       case '/admin': return 'Quản lý tài khoản';
-      default: return 'Bảng điều khiển';
+      default: return 'Tổng quan khối não';
     }
   };
 
@@ -87,7 +85,7 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
       <div className="flex items-center gap-base">
         {gocPhai}
         <button
-          onClick={() => navigate('/inbox')}
+          onClick={() => navigate('/ban-hang?the=dang-lam&viec=hop-thu')}
           title={waitingCount > 0 ? `${waitingCount} hội thoại đang chờ bạn xử lý` : 'Không có việc nào đang chờ'}
           className="text-primary hover:bg-surface-container-highest/80 rounded-full p-2 transition-all duration-200 flex items-center justify-center relative"
         >

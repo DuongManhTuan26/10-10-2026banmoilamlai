@@ -121,49 +121,25 @@ export class ApiError extends Error {
 }
 
 /**
- * Khoá localStorage giữ Trang đang chọn trên thanh menu.
+ * KHỐI NÃO đang chọn (docs/khoi-nao.md) — khoá localStorage giữ mã TRANG đang chọn ở bộ chọn duy nhất đầu thanh menu.
  *
- * ActivePage.tsx ghi, chỗ này đọc. Để đúng một chỗ khai báo chuỗi này, vì hai
- * nơi mà lệch nhau một chữ thì bộ não lặng lẽ đọc nhầm Trang.
+ * ActivePage.tsx ghi, chỗ này đọc. Một chỗ khai báo duy nhất: hai nơi lệch một chữ là khối não lặng lẽ đọc nhầm trang.
  */
-export const KHOA_TRANG_DANG_CHON = "zn_active_account";
+export const KHOA_TRANG_DANG_CHON = "zn_khoi_nao";
 
 /**
- * Đính Trang đang chọn vào mọi lệnh về bộ não AI.
+ * Đính khối não đang chọn vào MỌI yêu cầu (đầu X-Trang). Đọc thẳng localStorage chứ không giữ bản sao trong bộ nhớ: effect
+ * của màn hình con chạy TRƯỚC effect của provider, bản sao cập nhật muộn sẽ khiến lần gọi đầu sau khi đổi trang mang mã cũ.
  *
- * Vai trò, kịch bản và tài liệu gắn theo Trang chứ không theo tài khoản, nên
- * mỗi lệnh đọc/ghi cấu hình AI phải nói rõ đang làm việc với Trang nào. Làm ở
- * đây thay vì bắt từng màn hình tự nhớ kèm vào: chỉ cần một màn hình quên là
- * chủ shop sửa vai trò của Trang này nhưng ghi sang Trang khác — sai hoàn
- * toàn lặng lẽ, không có thông báo lỗi nào để mà biết.
- *
- * Đọc thẳng localStorage chứ không giữ một bản sao trong bộ nhớ, vì effect của
- * màn hình con chạy TRƯỚC effect của provider: một bản sao cập nhật muộn sẽ
- * khiến lần gọi đầu tiên sau khi đổi Trang vẫn mang mã Trang cũ.
- *
- * Máy chủ không tin con số này: nó suy ra Trang từ kênh rồi mới kiểm chủ sở
- * hữu. Sửa tay trong trình duyệt cũng không chạm được sang tài khoản khác.
+ * Máy chủ không tin con số này: nó kiểm người đăng nhập có quyền mở trang đó không (server/khoi-nao.ts), không có thì 404.
  */
-/** Kênh đang chọn — gửi kèm MỌI yêu cầu (đầu X-Kenh) để tiền AI ghi đúng trang. Máy chủ tự kiểm kênh thuộc ai. */
-function kenhDangChon(): string | null {
+function trangDangChon(): string | null {
   try {
     return localStorage.getItem(KHOA_TRANG_DANG_CHON);
   } catch {
+    // Trình duyệt chặn localStorage — coi như chưa chọn; máy chủ dùng trang mặc định của tài khoản.
     return null;
   }
-}
-
-function duongCoTrang(path: string): string {
-  if (!path.startsWith("/ai/")) return path;
-  if (/[?&]accountId=/.test(path)) return path;
-  let kenh: string | null = null;
-  try {
-    kenh = localStorage.getItem(KHOA_TRANG_DANG_CHON);
-  } catch {
-    // Trình duyệt chặn localStorage — coi như chưa chọn Trang nào.
-  }
-  if (!kenh) return path;
-  return `${path}${path.includes("?") ? "&" : "?"}accountId=${encodeURIComponent(kenh)}`;
 }
 
 async function request<T>(
@@ -185,11 +161,11 @@ async function request<T>(
    */
   let response: Response;
   try {
-    response = await fetch(`/api${duongCoTrang(path)}`, {
+    response = await fetch(`/api${path}`, {
       method,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...(kenhDangChon() ? { "X-Kenh": kenhDangChon()! } : {}),
+        ...(trangDangChon() ? { "X-Trang": trangDangChon()! } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       // Cookie phiên phải được gửi kèm, nếu không mọi request đều là 401.
@@ -964,7 +940,27 @@ export interface DashboardStats {
 // Nhóm hàm theo từng khu vực
 // ---------------------------------------------------------------------------
 
+/** Một khối não (trang bán hàng) người đăng nhập được mở. */
+export interface KhoiNaoInfo {
+  trang_id: number;
+  ten: string;
+  chu_id: number;
+  chu_ten: string;
+  chu_email: string;
+  la_cua_toi: boolean;
+  kenh: { id: string; platform: string; ten: string; connected: boolean; anh: string | null }[];
+}
+export type MaAi = "content" | "ads" | "sales" | "analytics";
+export interface NhatKyAi {
+  thayDoi: { luc: string; bang: string; hanh_dong: "them" | "sua" | "xoa"; truoc: Record<string, unknown> | null; sau: Record<string, unknown> | null; nguon: string | null }[];
+  viec: { luc: string; noi_dung: string; trang_thai: string }[];
+}
+
 export const api = {
+  khoiNao: {
+    danhSach: () => get<{ data: { bonAi: { so: number; ma: MaAi; khau: string; ten: string }[]; ds: KhoiNaoInfo[] } }>("/khoi-nao"),
+    nhatKy: (ai: MaAi) => get<{ data: NhatKyAi }>(`/khoi-nao/nhat-ky/${ai}`),
+  },
   /** Quản trị hệ thống. Máy chủ chặn người không phải quản trị, đây chỉ là lớp gọi. */
   admin: {
     /** Sao kê chi phí trả cho các bên thứ ba: đọc sống + sổ của app. */
