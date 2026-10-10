@@ -6,40 +6,8 @@ import { AppError, requireString, route } from "../http.js";
 import { chat, chatJson, asRecord, stringArray, DEFAULT_MODELS } from "../services/ai.js";
 import { extractOrderInfo, suggestReply } from "../services/sales-ai.js";
 import { generatePostContent } from "../services/content-ai.js";
-import { layTrangDangChon } from "../services/trang.js";
+import { naoCua } from "../khoi-nao.js";
 
-/**
- * Trang mà màn hình đang làm việc, suy từ kênh giao diện gửi lên.
- *
- * Bộ não — vai trò, tài liệu — gắn theo TRANG. Giao diện đã có sẵn bộ chọn
- * kênh nên chỉ cần gửi kèm accountId; không gửi thì lấy Trang đầu tiên, đúng
- * cho tài khoản một Trang.
- *
- * KHÔNG nhận trangId thẳng từ giao diện: làm vậy là để người ngoài tự khai
- * mình thuộc Trang nào. Suy từ kênh thì còn kiểm được kênh có thuộc tài khoản
- * đang đăng nhập hay không.
- */
-async function trangCuaReq(req: { method: string; user?: { id: number }; query: Record<string, unknown>; body?: Record<string, unknown> }) {
-  const kenh =
-    (typeof req.query?.accountId === "string" ? req.query.accountId : undefined) ??
-    (typeof req.body?.accountId === "string" ? (req.body.accountId as string) : undefined);
-  const trang = await layTrangDangChon(req.user!.id, kenh ?? null);
-  /*
-   * Đọc khi chưa có Trang thì trả cấu hình mặc định là đủ. GHI thì không có
-   * chỗ để ghi vào.
-   *
-   * Đã đo: tài khoản chưa có Trang bấm lưu vai trò AI, chế độ tự chủ, lịch tự
-   * đăng, phong cách ảnh hay thêm tài liệu — cả 5 đều vỡ 500 "Hệ thống gặp sự
-   * cố" vì cột trang_id không được rỗng. Người dùng không biết phải làm gì.
-   */
-  if (trang === null && req.method !== "GET") {
-    throw new AppError(
-      "Tài khoản này chưa gắn Fanpage nào. Vào mục Kết nối để gắn Fanpage trước.",
-      409
-    );
-  }
-  return trang;
-}
 import { docCauHinh, MAC_DINH, taoVideoTheoBai, tienVideoTuDongThang } from "../services/autopilot.js";
 import { docChuTuAnh, ANH_HOP_LE, GIOI_HAN_ANH } from "../services/vision.js";
 import { docCacBuoc } from "../services/sales-stages.js";
@@ -95,7 +63,7 @@ aiRouter.get(
     const config = await queryOne(
       `SELECT kind, system_prompt, tone, settings, updated_at
          FROM ai_configs WHERE trang_id = $1 AND kind = $2`,
-      [await trangCuaReq(req), kind]
+      [naoCua(req).trangId, kind]
     );
 
     const documents = await query(
@@ -103,7 +71,7 @@ aiRouter.get(
               extracted_text IS NOT NULL AS has_text
          FROM ai_documents WHERE trang_id = $1 AND kind = $2
          ORDER BY created_at DESC`,
-      [await trangCuaReq(req), kind]
+      [naoCua(req).trangId, kind]
     );
 
     res.json({
@@ -150,12 +118,12 @@ aiRouter.put(
          updated_at    = now()
        RETURNING kind, system_prompt, tone, settings, updated_at`,
       [
-        await trangCuaReq(req),
+        naoCua(req).trangId,
         kind,
         typeof body.systemPrompt === "string" ? body.systemPrompt : null,
         typeof body.tone === "string" ? body.tone : null,
         body.settings === undefined ? null : JSON.stringify(body.settings),
-        req.user!.id,
+        naoCua(req).chuId,
       ]
     );
 
@@ -174,7 +142,7 @@ aiRouter.get(
   route(async (req, res) => {
     const row = await queryOne<{ settings: Record<string, unknown> }>(
       "SELECT settings FROM ai_configs WHERE trang_id = $1 AND kind = 'sales'",
-      [await trangCuaReq(req)]
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: { config: docTuChu(row?.settings?.tuChu) } });
   })
@@ -192,7 +160,7 @@ aiRouter.put(
          settings   = ai_configs.settings || EXCLUDED.settings,
          updated_at = now()
        RETURNING settings`,
-      [await trangCuaReq(req), JSON.stringify({ tuChu: sach }), req.user!.id]
+      [naoCua(req).trangId, JSON.stringify({ tuChu: sach }), naoCua(req).chuId]
     );
 
     /*
@@ -212,9 +180,9 @@ aiRouter.put(
         `UPDATE conversations
             SET status = 'ai', ai_enabled = TRUE, handoff_reason = NULL,
                 handoff_at = NULL, updated_at = now()
-          WHERE user_id = $1 AND status = 'waiting_human'
+          WHERE trang_id = $1 AND status = 'waiting_human'
           RETURNING id`,
-        [req.user!.id]
+        [naoCua(req).trangId]
       );
       daCuu = cuu.rowCount ?? 0;
       if (daCuu > 0) {
@@ -242,7 +210,7 @@ aiRouter.get(
   route(async (req, res) => {
     const row = await queryOne<{ settings: Record<string, unknown> }>(
       "SELECT settings FROM ai_configs WHERE trang_id = $1 AND kind = 'sales'",
-      [await trangCuaReq(req)]
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: { stages: docCacBuoc(row?.settings?.stages) } });
   })
@@ -282,11 +250,11 @@ aiRouter.put(
          updated_at = now()
        RETURNING settings`,
       [
-        await trangCuaReq(req),
+        naoCua(req).trangId,
         JSON.stringify({
           stages: sach.map((b) => ({ id: b.id, ten: b.ten, mucTieu: b.mucTieu, enabled: b.enabled })),
         }),
-        req.user!.id,
+        naoCua(req).chuId,
       ]
     );
 
@@ -304,7 +272,7 @@ aiRouter.put(
 aiRouter.get(
   "/auto-pilot",
   route(async (req, res) => {
-    const trangGet = await trangCuaReq(req);
+    const trangGet = naoCua(req).trangId;
     const row = await queryOne<{ settings: Record<string, unknown> }>(
       "SELECT settings FROM ai_configs WHERE trang_id = $1 AND kind = 'content'",
       [trangGet]
@@ -312,9 +280,9 @@ aiRouter.get(
 
     const runs = await query(
       `SELECT slot_key, status, topic, post_id, note, created_at
-         FROM auto_pilot_runs WHERE user_id = $1
+         FROM auto_pilot_runs WHERE trang_id = $1
         ORDER BY id DESC LIMIT 20`,
-      [req.user!.id]
+      [trangGet]
     );
 
     res.json({
@@ -376,7 +344,7 @@ aiRouter.put(
          settings   = ai_configs.settings || EXCLUDED.settings,
          updated_at = now()
        RETURNING settings`,
-      [await trangCuaReq(req), JSON.stringify({ autoPilot: sach }), req.user!.id]
+      [naoCua(req).trangId, JSON.stringify({ autoPilot: sach }), naoCua(req).chuId]
     );
 
     res.json({ success: true, data: { config: sach, saved: !!updated } });
@@ -408,7 +376,7 @@ aiRouter.patch(
          settings   = ai_configs.settings || EXCLUDED.settings,
          updated_at = now()
        RETURNING kind, system_prompt, tone, settings, updated_at`,
-      [await trangCuaReq(req), kind, JSON.stringify(patch), req.user!.id]
+      [naoCua(req).trangId, kind, JSON.stringify(patch), naoCua(req).chuId]
     );
 
     res.json({ success: true, data: updated });
@@ -450,7 +418,7 @@ aiRouter.post(
         );
       }
 
-      const doc = await docChuTuAnh({ dataUrl: anh, filename, userId: req.user!.id });
+      const doc = await docChuTuAnh({ dataUrl: anh, filename, userId: naoCua(req).chuId });
       if (!doc.text) {
         throw new AppError(
           "Không đọc được chữ nào trong ảnh này. Vui lòng chụp rõ hơn, hoặc gõ lại " +
@@ -474,7 +442,7 @@ aiRouter.post(
        VALUES ($1, $2, $3, $4, $5, $6, '', $7)
        RETURNING id, filename, mime_type, size_bytes, created_at,
                  extracted_text IS NOT NULL AS has_text`,
-      [req.user!.id, await trangCuaReq(req), kind, filename, mimeType, sizeBytes || (text?.length ?? 0), text]
+      [naoCua(req).chuId, naoCua(req).trangId, kind, filename, mimeType, sizeBytes || (text?.length ?? 0), text]
     );
 
     res.status(201).json({ success: true, data: inserted });
@@ -487,7 +455,7 @@ aiRouter.delete(
     const kind = assertKind(req.params.kind);
     const result = await query(
       "DELETE FROM ai_documents WHERE id = $1 AND trang_id = $2 AND kind = $3",
-      [req.params.id, await trangCuaReq(req), kind]
+      [req.params.id, naoCua(req).trangId, kind]
     );
     if (!result.rowCount) throw new AppError("Không tìm thấy tài liệu", 404);
     res.json({ success: true });
@@ -603,10 +571,10 @@ aiRouter.post(
   "/video/loi-mo-ta",
   chanLamDungAI,
   route(async (req, res) => {
-    await trangCuaReq(req);
+    naoCua(req); // Phải đang ở một khối não (trang).
     const lc = docLuaChonVideo(req.body ?? {});
     const kq = await vietLoiMoTaVideo({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       noiDung: typeof req.body?.noiDung === "string" ? req.body.noiDung : "",
       mucDich: typeof req.body?.mucDich === "string" ? req.body.mucDich : "khoe_san_pham",
       soGiay: lc.soGiay,
@@ -628,9 +596,9 @@ aiRouter.post(
   "/video",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const viec = await taoVideo({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       model: typeof req.body?.model === "string" ? req.body.model : "",
       loiMoTa: typeof req.body?.loiMoTa === "string" ? req.body.loiMoTa : "",
@@ -649,10 +617,10 @@ aiRouter.post(
   "/video/theo-bai",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const b = req.body ?? {};
     const kq = await taoVideoTheoBai({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       postId: Number(b.postId),
       noiDung: typeof b.noiDung === "string" ? b.noiDung : "",
@@ -669,7 +637,7 @@ aiRouter.post(
 aiRouter.get(
   "/video/viec",
   route(async (req, res) => {
-    const trangId = await trangCuaReq(req);
+    const trangId = naoCua(req).trangId;
     const ds = trangId
       ? await query<ViecVideo>(
           `SELECT ${COT_VIEC} FROM video_ai WHERE trang_id = $1 AND du_an_id IS NULL ORDER BY created_at DESC LIMIT 20`,
@@ -703,12 +671,12 @@ aiRouter.post(
   "/video/du-an",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const b = req.body ?? {};
     const loai = b.loai === "tham_chieu" || b.loai === "trend" ? b.loai : "kich_ban";
     const lc = docLuaChonVideo(b);
     const duAn = await taoDuAn({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       loai,
       yTuong: typeof b.yTuong === "string" ? b.yTuong : "",
@@ -729,7 +697,7 @@ aiRouter.post(
 aiRouter.put(
   "/video/du-an/:id",
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const duAn = await suaDuAn({
       trangId,
       id: maDuAn(req.params.id),
@@ -746,7 +714,7 @@ aiRouter.post(
   "/video/du-an/:id/bat-dau",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const duAn = await batDauDuAn(trangId, maDuAn(req.params.id));
     res.status(202).json({ success: true, data: duAnRaNgoai(duAn) });
   })
@@ -757,7 +725,7 @@ aiRouter.post(
   "/video/du-an/:id/tiep-tuc",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const duAn = await tiepTucDuAn(trangId, maDuAn(req.params.id));
     res.status(202).json({ success: true, data: duAnRaNgoai(duAn) });
   })
@@ -767,7 +735,7 @@ aiRouter.post(
 aiRouter.get(
   "/video/du-an",
   route(async (req, res) => {
-    const trangId = await trangCuaReq(req);
+    const trangId = naoCua(req).trangId;
     const ds = trangId
       ? await query<DuAnVideo & { canh_xong: number }>(
           `SELECT ${COT_DU_AN},
@@ -805,9 +773,9 @@ aiRouter.post(
   "/video/sua",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const viec = await suaVideo({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       model: typeof req.body?.model === "string" ? req.body.model : "",
       videoNguon: typeof req.body?.videoNguon === "string" ? req.body.videoNguon : "",
@@ -823,9 +791,9 @@ aiRouter.post(
   "/video/trend/phan-tich",
   chanLamDungAI,
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const kq = await phanTichTrend({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       videoNguon: typeof req.body?.videoNguon === "string" ? req.body.videoNguon : "",
     });
@@ -840,7 +808,7 @@ aiRouter.get(
     res.json({
       success: true,
       data: {
-        phongCach: await docPhongCachDaLuu(await trangCuaReq(req)),
+        phongCach: await docPhongCachDaLuu(naoCua(req).trangId),
         macDinh: PHONG_CACH_MAC_DINH,
       },
     });
@@ -909,16 +877,16 @@ function maThuVien(v: unknown): number {
 aiRouter.get(
   "/thu-vien",
   route(async (req, res) => {
-    res.json({ success: true, data: await dsThuVien(await trangCuaReq(req)) });
+    res.json({ success: true, data: await dsThuVien(naoCua(req).trangId) });
   })
 );
 
 aiRouter.post(
   "/thu-vien",
   route(async (req, res) => {
-    const trangId = (await trangCuaReq(req))!;
+    const trangId = naoCua(req).trangId;
     const muc = await themVaoThuVien({
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       trangId,
       loai: docLoai(req.body?.loai),
       ten: docTen(req.body?.ten),
@@ -932,7 +900,7 @@ aiRouter.post(
 aiRouter.get(
   "/thu-vien/:id/anh",
   route(async (req, res) => {
-    const anh = await docAnhThuVien(req.user!.id, maThuVien(req.params.id));
+    const anh = await docAnhThuVien(naoCua(req).trangId, maThuVien(req.params.id));
     res.setHeader("Content-Type", anh.kieu);
     res.setHeader("Cache-Control", "private, max-age=86400");
     res.send(anh.du_lieu);
@@ -943,7 +911,7 @@ aiRouter.get(
 aiRouter.post(
   "/thu-vien/:id/dung",
   route(async (req, res) => {
-    const url = await dungAnh((await trangCuaReq(req))!, maThuVien(req.params.id));
+    const url = await dungAnh(naoCua(req).trangId, maThuVien(req.params.id));
     res.json({ success: true, data: { url: anDiaChiKho(url) } });
   })
 );
@@ -951,7 +919,7 @@ aiRouter.post(
 aiRouter.delete(
   "/thu-vien/:id",
   route(async (req, res) => {
-    await xoaThuVien((await trangCuaReq(req))!, maThuVien(req.params.id));
+    await xoaThuVien(naoCua(req).trangId, maThuVien(req.params.id));
     res.json({ success: true });
   })
 );
@@ -972,8 +940,8 @@ aiRouter.post(
     const anhMau = typeof req.body?.sample === "string" ? req.body.sample : undefined;
 
     const anh = await taoAnhChoBai({
-      userId: req.user!.id,
-      trangId: await trangCuaReq(req),
+      userId: naoCua(req).chuId,
+      trangId: naoCua(req).trangId,
       noiDung,
       yeuCau,
       phongCach,
@@ -996,8 +964,8 @@ aiRouter.post(
     // Viết bài nằm ở services/content-ai.ts để bộ tự động trong worker gọi
     // được cùng một hàm — worker không có req/res để mượn.
     const result = await generatePostContent({
-      userId: req.user!.id,
-      trangId: await trangCuaReq(req),
+      userId: naoCua(req).chuId,
+      trangId: naoCua(req).trangId,
       topic,
       goal: typeof req.body?.goal === "string" ? req.body.goal : "sales",
       count: Number(req.body?.count ?? 3),
@@ -1017,8 +985,8 @@ aiRouter.post(
   chanLamDungAI,
   route(async (req, res) => {
     const conversation = await queryOne(
-      "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT id FROM conversations WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!conversation) throw new AppError("Không tìm thấy hội thoại", 404);
 
@@ -1032,8 +1000,8 @@ aiRouter.post(
   chanLamDungAI,
   route(async (req, res) => {
     const conversation = await queryOne(
-      "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT id FROM conversations WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!conversation) throw new AppError("Không tìm thấy hội thoại", 404);
 
@@ -1050,8 +1018,8 @@ aiRouter.get(
   "/handoff-rules",
   route(async (req, res) => {
     const rows = await query(
-      "SELECT rule_key, enabled, config FROM handoff_rules WHERE user_id = $1 ORDER BY rule_key",
-      [req.user!.id]
+      "SELECT rule_key, enabled, config FROM handoff_rules WHERE trang_id = $1 ORDER BY rule_key",
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: rows.rows });
   })
@@ -1064,12 +1032,12 @@ aiRouter.patch(
     const config = req.body?.config ?? {};
 
     const updated = await queryOne(
-      `INSERT INTO handoff_rules (user_id, rule_key, enabled, config)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, rule_key) DO UPDATE SET
+      `INSERT INTO handoff_rules (user_id, trang_id, rule_key, enabled, config)
+       VALUES ($1, $5, $2, $3, $4)
+       ON CONFLICT (trang_id, rule_key) DO UPDATE SET
          enabled = EXCLUDED.enabled, config = EXCLUDED.config, updated_at = now()
        RETURNING rule_key, enabled, config`,
-      [req.user!.id, req.params.key, enabled, JSON.stringify(config)]
+      [naoCua(req).chuId, req.params.key, enabled, JSON.stringify(config), naoCua(req).trangId]
     );
 
     res.json({ success: true, data: updated });
@@ -1091,14 +1059,14 @@ aiRouter.post(
 
     const config = await queryOne<{ system_prompt: string }>(
       "SELECT system_prompt FROM ai_configs WHERE trang_id = $1 AND kind = $2",
-      [await trangCuaReq(req), kind]
+      [naoCua(req).trangId, kind]
     );
 
     const documents = await query<{ filename: string; extracted_text: string | null }>(
       `SELECT filename, extracted_text FROM ai_documents
         WHERE trang_id = $1 AND kind = $2 AND extracted_text IS NOT NULL
         ORDER BY created_at DESC LIMIT 5`,
-      [await trangCuaReq(req), kind]
+      [naoCua(req).trangId, kind]
     );
 
     const knowledge = documents.rows.length
@@ -1111,7 +1079,7 @@ aiRouter.post(
     const result = await chat({
       task: kind === "sales" ? "sales" : "content",
       viec: "thu_ai",
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       messages: [
         {
           role: "system",

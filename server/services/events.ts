@@ -209,7 +209,7 @@ async function handleMessageReceived(event: WebhookEvent): Promise<void> {
          (user_id, social_account_id, platform, participant_id, name, avatar_url,
           phone, first_seen_at, last_seen_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
-       ON CONFLICT (user_id, platform, participant_id) DO UPDATE SET
+       ON CONFLICT (trang_id, platform, participant_id) DO UPDATE SET
          last_seen_at = now(),
          -- Chỉ ghi đè khi bản ghi đang trống, để không xoá thông tin
          -- nhân viên đã sửa tay trước đó.

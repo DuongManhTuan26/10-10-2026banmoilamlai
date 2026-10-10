@@ -8,7 +8,7 @@
  *
  *  1. MỖI Ô LỊCH CHỈ CHẠY MỘT LẦN. Worker quét 5 giây một lượt và có thể chạy
  *     nhiều bản song song. Trước khi gọi AI, hàm này giành chỗ bằng một dòng
- *     trong auto_pilot_runs có khoá duy nhất (user_id, slot_key). Ai chèn được
+ *     trong auto_pilot_runs có khoá duy nhất (trang_id, slot_key). Ai chèn được
  *     mới được làm; những lượt còn lại thấy xung đột và đi tiếp.
  *
  *  2. KHÔNG ĐĂNG BÙ. Máy chủ tắt qua đêm rồi bật lại lúc 11 giờ trưa thì bài
@@ -269,7 +269,7 @@ export async function runDueAutoPilot(bayGio = new Date()): Promise<number> {
    */
   const shops = await query<DongCauHinh>(
     `SELECT user_id, trang_id, settings FROM ai_configs
-      WHERE kind = 'content' AND settings->'autoPilot'->>'enabled' = 'true'`
+      WHERE kind = 'content' AND trang_id IS NOT NULL AND settings->'autoPilot'->>'enabled' = 'true'`
   );
 
   let daLam = 0;
@@ -285,16 +285,17 @@ export async function runDueAutoPilot(bayGio = new Date()): Promise<number> {
        * Fanpage có hai bài. Ghi trước thì lượt thua cuộc dừng ngay tại đây.
        */
       const cho = await queryOne<{ id: number }>(
-        `INSERT INTO auto_pilot_runs (user_id, slot_key, status)
-         VALUES ($1, $2, 'running')
-         ON CONFLICT (user_id, slot_key) DO NOTHING
+        `INSERT INTO auto_pilot_runs (user_id, trang_id, slot_key, status)
+         VALUES ($1, $3, $2, 'running')
+         ON CONFLICT (trang_id, slot_key) DO NOTHING
          RETURNING id`,
-        [shop.user_id, o.khoa]
+        [shop.user_id, o.khoa, shop.trang_id]
       );
       if (!cho) continue;
 
       try {
-        const xong = await chayChoTrang(shop.trang_id, () => lamMotO(shop.user_id, shop.trang_id, cau, cho.id, o.khoa));
+        const trangId = shop.trang_id!;
+        const xong = await chayChoTrang(trangId, () => lamMotO(shop.user_id, trangId, cau, cho.id, o.khoa));
         if (xong) daLam += 1;
       } catch (error) {
         const loi = error instanceof Error ? error.message : String(error);
@@ -311,7 +312,7 @@ export async function runDueAutoPilot(bayGio = new Date()): Promise<number> {
 
 async function lamMotO(
   userId: number,
-  trangId: number | null,
+  trangId: number,
   cau: AutoPilotConfig,
   runId: number,
   khoa: string
@@ -332,11 +333,11 @@ async function lamMotO(
   const kenh = await query<{ id: string; platform: string }>(
     cau.accountIds.length
       ? `SELECT id, platform FROM social_accounts
-           WHERE user_id = $1 AND connected = TRUE AND platform <> 'metaads'
+           WHERE trang_id = $1 AND connected = TRUE AND platform <> 'metaads'
              AND id = ANY($2::text[])`
       : `SELECT id, platform FROM social_accounts
-           WHERE user_id = $1 AND connected = TRUE AND platform <> 'metaads'`,
-    cau.accountIds.length ? [userId, cau.accountIds] : [userId]
+           WHERE trang_id = $1 AND connected = TRUE AND platform <> 'metaads'`,
+    cau.accountIds.length ? [trangId, cau.accountIds] : [trangId]
   );
   if (kenh.rows.length === 0) {
     await ghiBo("Không có kênh nào đang kết nối để đăng.");
@@ -346,13 +347,13 @@ async function lamMotO(
   // Xoay vòng chủ đề theo số lượt đã chạy, để không lặp lại chủ đề đầu mãi.
   const daChay = await queryOne<{ n: string }>(
     `SELECT count(*)::text AS n FROM auto_pilot_runs
-      WHERE user_id = $1 AND status IN ('ok', 'failed') AND id < $2`,
-    [userId, runId]
+      WHERE trang_id = $1 AND status IN ('ok', 'failed') AND id < $2`,
+    [trangId, runId]
   );
   const chuDe = cau.topics[Number(daChay?.n ?? 0) % cau.topics.length];
 
   const ganDay = await query<{ content: string }>(
-    `SELECT content FROM posts WHERE user_id = $1
+    `SELECT content FROM posts WHERE trang_id = $1
        AND status IN ('published', 'scheduled', 'publishing', 'pending_approval')
      ORDER BY created_at DESC LIMIT 3`,
     [userId]
@@ -466,11 +467,11 @@ async function lamMotO(
   if (choVideo) {
     // Chờ video: chưa đăng, chưa hẹn giờ. Chế độ đăng đã chọn giữ lại để áp khi video xong.
     const baiCho = await queryOne<{ id: number }>(
-      `INSERT INTO posts (user_id, content, media, target_account_ids, status,
+      `INSERT INTO posts (user_id, trang_id, content, media, target_account_ids, status,
                           ai_generated, ai_prompt, auto_publish_at, cho_video_id, cho_video_guard)
-       VALUES ($1, $2, $3::jsonb, $4::text[], 'pending_approval', TRUE, $5, NULL, $6, $7)
+       VALUES ($1, $8, $2, $3::jsonb, $4::text[], 'pending_approval', TRUE, $5, NULL, $6, $7)
        RETURNING id`,
-      [userId, noiDung, JSON.stringify(media), kenh.rows.map((k) => k.id), chuDe, choVideo.id, guard]
+      [userId, noiDung, JSON.stringify(media), kenh.rows.map((k) => k.id), chuDe, choVideo.id, guard, trangId]
     );
     if (!baiCho) throw new Error("Không lưu được bài vừa viết.");
     await query(`UPDATE auto_pilot_runs SET status = 'ok', topic = $2, post_id = $3, note = $4 WHERE id = $1`, [
@@ -486,9 +487,9 @@ async function lamMotO(
     guard === "notify" ? new Date(Date.now() + cau.notifyMinutes * 60_000) : null;
 
   const bai = await queryOne<{ id: number }>(
-    `INSERT INTO posts (user_id, content, media, target_account_ids, status,
+    `INSERT INTO posts (user_id, trang_id, content, media, target_account_ids, status,
                         ai_generated, ai_prompt, auto_publish_at)
-     VALUES ($1, $2, $3::jsonb, $4::text[], $5, TRUE, $6, $7)
+     VALUES ($1, $8, $2, $3::jsonb, $4::text[], $5, TRUE, $6, $7)
      RETURNING id`,
     [
       userId,
@@ -498,6 +499,7 @@ async function lamMotO(
       guard === "publish" ? "draft" : "pending_approval",
       chuDe,
       tuDangLuc,
+      trangId,
     ]
   );
   if (!bai) throw new Error("Không lưu được bài vừa viết.");
@@ -509,7 +511,7 @@ async function lamMotO(
   ]);
 
   if (guard === "publish") {
-    await publishPost(userId, bai.id);
+    await publishPost(trangId, bai.id);
     await query(`UPDATE auto_pilot_runs SET status = 'ok', note = $2 WHERE id = $1`, [
       runId,
       "Đã viết và gửi đăng." + ghiChuAnh + ghiChuVideo,
@@ -563,8 +565,8 @@ async function baoTelegram(userId: number, text: string): Promise<void> {
  * tự khắc rơi khỏi truy vấn này — huỷ chỉ đơn giản là xoá bài.
  */
 export async function runDueAutoPublishes(): Promise<number> {
-  const toiHan = await query<{ id: number; user_id: number }>(
-    `SELECT id, user_id FROM posts
+  const toiHan = await query<{ id: number; trang_id: number }>(
+    `SELECT id, trang_id FROM posts
       WHERE status = 'pending_approval'
         AND auto_publish_at IS NOT NULL
         AND auto_publish_at <= now()
@@ -582,7 +584,7 @@ export async function runDueAutoPublishes(): Promise<number> {
      */
     await query(`UPDATE posts SET auto_publish_at = NULL WHERE id = $1`, [bai.id]);
     try {
-      await publishPost(bai.user_id, bai.id);
+      await publishPost(bai.trang_id, bai.id);
       dem += 1;
     } catch (error) {
       console.error(
@@ -688,8 +690,8 @@ export async function taoVideoTheoBai(p: {
 }): Promise<{ videoId: number; gia: number }> {
   if (!Number.isInteger(p.postId) || p.postId <= 0) throw new AppError("Thiếu bài viết để gắn video.", 400);
   const bai = await queryOne<{ status: string; content: string }>(
-    "SELECT status, content FROM posts WHERE id = $1 AND user_id = $2",
-    [p.postId, p.userId]
+    "SELECT status, content FROM posts WHERE id = $1 AND trang_id = $2",
+    [p.postId, p.trangId]
   );
   if (!bai) throw new AppError("Không tìm thấy bài viết", 404);
   if (!TRANG_THAI_CHO_VIDEO.includes(bai.status)) throw new AppError("Bài đã gửi đăng, không gắn thêm video được.", 409);
@@ -702,8 +704,8 @@ export async function taoVideoTheoBai(p: {
   const viec = await vietVaGuiVideo({ ...p, noiDung: p.noiDung.trim() || bai.content });
   const gan = await queryOne<{ id: number }>(
     `UPDATE posts SET status = 'pending_approval', cho_video_id = $3, cho_video_guard = 'publish', updated_at = now()
-      WHERE id = $1 AND user_id = $2 AND status = ANY($4::text[]) RETURNING id`,
-    [p.postId, p.userId, viec.id, TRANG_THAI_CHO_VIDEO]
+      WHERE id = $1 AND trang_id = $2 AND status = ANY($4::text[]) RETURNING id`,
+    [p.postId, p.trangId, viec.id, TRANG_THAI_CHO_VIDEO]
   );
   if (!gan) throw new AppError("Bài vừa được đăng hoặc xoá trong lúc gửi video. Video vẫn đang tạo, xem ở Xưởng AI.", 409);
   return { videoId: viec.id, gia };
@@ -737,7 +739,7 @@ export async function runDueVideoTuDong(): Promise<number> {
     trang_thai: string; url: string | null; trang_id: number; qua_lau: boolean;
   }>(
     `SELECT p.id, p.user_id, p.content, p.media, p.cho_video_id, p.cho_video_guard,
-            v.trang_thai, v.url, v.trang_id,
+            v.trang_thai, v.url, p.trang_id,
             v.created_at < now() - ($1 || ' minutes')::interval AS qua_lau
        FROM posts p JOIN video_ai v ON v.id = p.cho_video_id
       WHERE p.cho_video_id IS NOT NULL AND p.status = 'pending_approval'
@@ -788,7 +790,7 @@ export async function runDueVideoTuDong(): Promise<number> {
     const guard = b.cho_video_guard === "publish" || b.cho_video_guard === "notify" ? b.cho_video_guard : "approve";
     if (guard === "publish") {
       await query("UPDATE posts SET status = 'draft' WHERE id = $1", [b.id]);
-      await publishPost(b.user_id, b.id);
+      await publishPost(b.trang_id, b.id);
     } else if (guard === "notify") {
       await query("UPDATE posts SET auto_publish_at = now() + ($2 || ' minutes')::interval WHERE id = $1", [b.id, String(cau.notifyMinutes)]);
     }

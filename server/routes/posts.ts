@@ -6,6 +6,7 @@ import * as zernio from "../services/zernio.js";
 import { publishPost, toMediaItems } from "../services/publish.js";
 import { doiChieuMotBai, ghiKetQua } from "../services/post-status.js";
 import { anDiaChiKho, doiDiaChiMedia } from "../services/media-proxy.js";
+import { naoCua } from "../khoi-nao.js";
 
 export const postsRouter = Router();
 
@@ -63,8 +64,9 @@ postsRouter.get(
   "/",
   route(async (req, res) => {
     const { status } = req.query;
-    const conditions = ["user_id = $1"];
-    const params: unknown[] = [req.user!.id];
+    // Bài của KHỐI NÃO đang chọn (docs/khoi-nao.md).
+    const conditions = ["trang_id = $1"];
+    const params: unknown[] = [naoCua(req).trangId];
 
     if (typeof status === "string" && status !== "" && status !== "all") {
       params.push(status);
@@ -83,8 +85,8 @@ postsRouter.get(
               COUNT(*) FILTER (WHERE status = 'published')::int        AS published,
               COUNT(*) FILTER (WHERE status = 'draft')::int            AS draft,
               COUNT(*) FILTER (WHERE status = 'failed')::int           AS failed
-         FROM posts WHERE user_id = $1`,
-      [req.user!.id]
+         FROM posts WHERE trang_id = $1`,
+      [naoCua(req).trangId]
     );
 
     res.json({ success: true, data: rows.rows.map(anMediaTrongBai), summary });
@@ -120,6 +122,16 @@ postsRouter.post(
     const media = toMediaItems(body.media);
     assertMediaSurvivesSchedule(media, scheduledFor);
 
+    // Kênh đích phải là kênh của ĐÚNG trang này — không đăng bài của khối não này lên Fanpage của trang khác.
+    const nao = naoCua(req);
+    if (targetAccountIds.length) {
+      const dung = await queryOne<{ n: number }>(
+        "SELECT count(*)::int AS n FROM social_accounts WHERE trang_id = $1 AND id = ANY($2::text[])",
+        [nao.trangId, targetAccountIds]
+      );
+      if ((dung?.n ?? 0) !== new Set(targetAccountIds).size) throw new AppError("Có kênh không thuộc trang bán hàng này", 400);
+    }
+
     /*
      * CHẶN TẠO TRÙNG Ở TẦNG MÁY CHỦ.
      *
@@ -132,10 +144,10 @@ postsRouter.post(
      */
     const vuaTao = await queryOne<{ id: number; status: string }>(
       `SELECT id, status FROM posts
-        WHERE user_id = $1 AND content = $2
+        WHERE trang_id = $1 AND content = $2
           AND created_at > now() - interval '1 minute'
         ORDER BY created_at DESC LIMIT 1`,
-      [req.user!.id, content]
+      [nao.trangId, content]
     );
 
     if (vuaTao) {
@@ -148,12 +160,12 @@ postsRouter.post(
 
     const inserted = await queryOne(
       `INSERT INTO posts
-         (user_id, content, media, target_account_ids, status, scheduled_for,
+         (user_id, trang_id, content, media, target_account_ids, status, scheduled_for,
           ai_generated, ai_prompt)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       VALUES ($1,$9,$2,$3,$4,$5,$6,$7,$8)
        RETURNING *`,
       [
-        req.user!.id,
+        nao.chuId,
         content,
         JSON.stringify(media),
         targetAccountIds,
@@ -161,6 +173,7 @@ postsRouter.post(
         scheduledFor,
         body.aiGenerated === true,
         typeof body.aiPrompt === "string" ? body.aiPrompt : null,
+        nao.trangId,
       ]
     );
 
@@ -173,7 +186,7 @@ postsRouter.patch(
   route(async (req, res) => {
     const body = req.body ?? {};
     const fields: string[] = [];
-    const params: unknown[] = [req.params.id, req.user!.id];
+    const params: unknown[] = [req.params.id, naoCua(req).trangId];
 
     const assign = (column: string, value: unknown) => {
       params.push(value);
@@ -187,8 +200,8 @@ postsRouter.patch(
       media: unknown;
       scheduled_for: Date | null;
     }>(
-      "SELECT media, scheduled_for FROM posts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT media, scheduled_for FROM posts WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!current) throw new AppError("Không tìm thấy bài viết", 404);
 
@@ -236,7 +249,7 @@ postsRouter.patch(
 
     const updated = await queryOne(
       `UPDATE posts SET ${fields.join(", ")}, updated_at = now()
-        WHERE id = $1 AND user_id = $2 RETURNING *`,
+        WHERE id = $1 AND trang_id = $2 RETURNING *`,
       params
     );
 
@@ -263,8 +276,8 @@ postsRouter.put(
     const content = requireString(req.body, "content", "nội dung bài viết");
 
     const post = await queryOne<{ id: number; status: string; platform_post_ref: string | null }>(
-      "SELECT id, status, platform_post_ref FROM posts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT id, status, platform_post_ref FROM posts WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!post) throw new AppError("Không tìm thấy bài viết này", 404);
     if (post.status !== "published" || !post.platform_post_ref) {
@@ -294,8 +307,8 @@ postsRouter.post(
   "/:id/unpublish",
   route(async (req, res) => {
     const post = await queryOne<{ id: number; status: string; platform_post_ref: string | null }>(
-      "SELECT id, status, platform_post_ref FROM posts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT id, status, platform_post_ref FROM posts WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!post) throw new AppError("Không tìm thấy bài viết này", 404);
     if (!post.platform_post_ref) {
@@ -320,7 +333,7 @@ postsRouter.post(
   route(async (req, res) => {
     // Toàn bộ xử lý nằm ở services/publish.ts để bộ tự động dùng chung đúng
     // một đường mã — xem phần đầu tệp đó để biết vì sao.
-    const updated = await publishPost(req.user!.id, req.params.id);
+    const updated = await publishPost(naoCua(req).trangId, req.params.id);
     res.json({ success: true, data: anMediaTrongBai(updated) });
   })
 );
@@ -374,8 +387,8 @@ postsRouter.post(
       content: string;
       platform_post_ref: string | null;
     }>(
-      "SELECT id, content, platform_post_ref FROM posts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT id, content, platform_post_ref FROM posts WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!post) throw new AppError("Không tìm thấy bài viết", 404);
 
@@ -399,9 +412,9 @@ postsRouter.post(
 postsRouter.delete(
   "/:id",
   route(async (req, res) => {
-    const result = await query("DELETE FROM posts WHERE id = $1 AND user_id = $2", [
+    const result = await query("DELETE FROM posts WHERE id = $1 AND trang_id = $2", [
       req.params.id,
-      req.user!.id,
+      naoCua(req).trangId,
     ]);
     if (!result.rowCount) throw new AppError("Không tìm thấy bài viết", 404);
     res.json({ success: true });

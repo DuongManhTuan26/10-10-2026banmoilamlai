@@ -1,3 +1,4 @@
+import type { Request } from "express";
 import crypto from "node:crypto";
 import { Router } from "express";
 import { query, queryOne } from "../db.js";
@@ -15,6 +16,21 @@ import {
   allChannels,
   type PlatformChannel,
 } from "../platforms.js";
+
+/**
+ * Tài khoản CHỦ của khối não đang mở (docs/khoi-nao.md) — nối / đổi / gỡ kênh luôn làm trên tài khoản sở hữu trang, kể cả
+ * khi người bấm là chủ chuỗi đang mở trang của tài khoản con. Chưa mở trang nào → chính người đăng nhập.
+ */
+async function chuTaiKhoan(req: Request): Promise<{ id: number; email: string; name: string; profileRef: string | null; role: string }> {
+  const id = req.nao?.chuId ?? req.user!.id;
+  if (id === req.user!.id) return req.user!;
+  const r = await queryOne<{ id: number; email: string; name: string; profile_ref: string | null; role: string }>(
+    "SELECT id::int AS id, email, name, profile_ref, role FROM users WHERE id = $1",
+    [id]
+  );
+  if (!r) throw new AppError("Không tìm thấy tài khoản của trang này", 404);
+  return { id: r.id, email: r.email, name: r.name, profileRef: r.profile_ref, role: r.role };
+}
 
 export const connectionsRouter = Router();
 
@@ -37,6 +53,7 @@ connectionsRouter.use(requireAuth);
 connectionsRouter.get(
   "/platforms",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const accounts = await query<{
       id: string;
       platform: string;
@@ -45,8 +62,8 @@ connectionsRouter.get(
       needs_reconnection: boolean;
     }>(
       `SELECT id, platform, display_name, connected, needs_reconnection
-         FROM social_accounts WHERE user_id = $1`,
-      [req.user!.id]
+         FROM social_accounts WHERE ${req.nao ? "trang_id" : "user_id"} = $1`,
+      [req.nao ? req.nao.trangId : chu.id]
     );
 
     const byPlatform = new Map<string, typeof accounts.rows>();
@@ -95,6 +112,7 @@ connectionsRouter.get(
 connectionsRouter.get(
   "/accounts",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const result = await query(
       /*
        * trang_id đi kèm để giao diện biết kênh nào chung một bộ não.
@@ -108,9 +126,9 @@ connectionsRouter.get(
               followers_count, connected, needs_reconnection, token_expires_at,
               last_synced_at, created_at, trang_id
          FROM social_accounts
-        WHERE user_id = $1
+        WHERE ${req.nao ? "trang_id" : "user_id"} = $1
         ORDER BY platform, display_name`,
-      [req.user!.id]
+      [req.nao ? req.nao.trangId : chu.id]
     );
     res.json({ success: true, data: result.rows });
   })
@@ -270,6 +288,7 @@ connectionsPublicRouter.get(
 connectionsRouter.get(
   "/pending-selection",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const pending = await queryOne<{
       platform: string;
       profile_id: string;
@@ -280,7 +299,7 @@ connectionsRouter.get(
       `SELECT platform, profile_id, temp_token, connect_token, step
          FROM pending_connections
         WHERE user_id = $1 AND expires_at > now()`,
-      [req.user!.id]
+      [chu.id]
     );
 
     if (!pending) {
@@ -289,7 +308,7 @@ connectionsRouter.get(
     }
 
     // Chốt chặn: chỉ chủ của hồ sơ đó mới được xem danh sách Trang.
-    if (pending.profile_id !== req.user!.profileRef) {
+    if (pending.profile_id !== chu.profileRef) {
       throw new AppError("Phiên cấp quyền không thuộc về tài khoản này", 403);
     }
 
@@ -324,6 +343,7 @@ connectionsRouter.get(
 connectionsRouter.post(
   "/select-pages",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const pageIds = Array.isArray(req.body?.pageIds)
       ? req.body.pageIds.filter((id: unknown): id is string => typeof id === "string")
       : [];
@@ -338,7 +358,7 @@ connectionsRouter.post(
       `SELECT profile_id, temp_token, user_profile, connect_token
          FROM pending_connections
         WHERE user_id = $1 AND expires_at > now()`,
-      [req.user!.id]
+      [chu.id]
     );
 
     if (!pending) {
@@ -348,7 +368,7 @@ connectionsRouter.post(
       );
     }
 
-    if (pending.profile_id !== req.user!.profileRef) {
+    if (pending.profile_id !== chu.profileRef) {
       throw new AppError("Phiên cấp quyền không thuộc về tài khoản này", 403);
     }
 
@@ -357,7 +377,7 @@ connectionsRouter.post(
      * thì kênh đã được tạo bên họ, mình từ chối ở đây nhưng vẫn bị tính tiền
      * và vẫn phải đi dọn.
      */
-    await chanNeuThemFanpage(req.user!.id, pageIds);
+    await chanNeuThemFanpage(chu.id, pageIds);
 
     const connected: string[] = [];
     const failed: Array<{ pageId: string; error: string }> = [];
@@ -383,7 +403,7 @@ connectionsRouter.post(
     }
 
     // Dùng xong là xoá, không giữ khoá tạm của Facebook lâu hơn mức cần thiết.
-    await query("DELETE FROM pending_connections WHERE user_id = $1", [req.user!.id]);
+    await query("DELETE FROM pending_connections WHERE user_id = $1", [chu.id]);
 
     if (connected.length === 0) {
       throw new AppError(
@@ -399,7 +419,8 @@ connectionsRouter.post(
 connectionsRouter.post(
   "/sync",
   route(async (req, res) => {
-    const user = req.user!;
+    const chu = await chuTaiKhoan(req);
+    const user = chu;
 
     // Người dùng chưa có hồ sơ Zernio thì tạo mới, để dữ liệu shop này
     // tách khỏi các shop khác trên cùng một API key.
@@ -429,6 +450,7 @@ connectionsRouter.post(
 connectionsRouter.post(
   "/connect-url",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const platform = requireString(req.body, "platform", "nền tảng");
 
     const channel = allChannels.find(
@@ -445,7 +467,7 @@ connectionsRouter.post(
       );
     }
 
-    const profileId = await ensureProfile(req.user!);
+    const profileId = await ensureProfile(chu);
 
     /*
      * Luồng headless: Zernio KHÔNG dựng màn hình chọn Trang, mà đẩy trình duyệt
@@ -474,7 +496,7 @@ connectionsRouter.post(
          connect_state = EXCLUDED.connect_state,
          created_at    = now(),
          expires_at    = now() + interval '15 minutes'`,
-      [req.user!.id, maBiMat]
+      [chu.id, maBiMat]
     );
 
     const url = await zernio.getConnectUrl(channel.platformKey, profileId, {
@@ -494,6 +516,7 @@ connectionsRouter.post(
 connectionsRouter.get(
   "/available-profiles",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const profiles = await zernio.listProfiles();
 
     // Hồ sơ riêng của Trang người khác cũng là đã có chủ.
@@ -502,7 +525,7 @@ connectionsRouter.get(
         WHERE profile_ref IS NOT NULL AND id <> $1
        UNION
        SELECT profile_ref FROM trang WHERE user_id <> $1`,
-      [req.user!.id]
+      [chu.id]
     );
     const claimedIds = new Set(claimed.rows.map((row) => row.profile_ref));
 
@@ -523,7 +546,7 @@ connectionsRouter.get(
           id: profile._id,
           name: profile.name,
           accountCount: countByProfile.get(profile._id) ?? 0,
-          isCurrent: profile._id === req.user!.profileRef,
+          isCurrent: profile._id === chu.profileRef,
         })),
     });
   })
@@ -532,6 +555,7 @@ connectionsRouter.get(
 connectionsRouter.post(
   "/adopt-profile",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const profileId = requireString(req.body, "profileId", "hồ sơ");
 
     // Hồ sơ đã thuộc về shop khác thì tuyệt đối không cho nhận, nếu không
@@ -541,7 +565,7 @@ connectionsRouter.post(
       `SELECT id FROM users WHERE profile_ref = $1 AND id <> $2
        UNION
        SELECT user_id FROM trang WHERE profile_ref = $1 AND user_id <> $2`,
-      [profileId, req.user!.id]
+      [profileId, chu.id]
     );
     if (taken) {
       throw new AppError("Hồ sơ này đã được một tài khoản khác sử dụng", 409);
@@ -554,7 +578,7 @@ connectionsRouter.post(
 
     await query("UPDATE users SET profile_ref = $1, updated_at = now() WHERE id = $2", [
       profileId,
-      req.user!.id,
+      chu.id,
     ]);
 
     res.json({ success: true, profileId });
@@ -570,9 +594,10 @@ connectionsRouter.post(
 connectionsRouter.get(
   "/accounts/:id/pages",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const account = await queryOne<{ id: string; platform: string }>(
       "SELECT id, platform FROM social_accounts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      [req.params.id, chu.id]
     );
     if (!account) throw new AppError("Không tìm thấy kênh này", 404);
     if (account.platform !== "facebook") {
@@ -597,11 +622,12 @@ connectionsRouter.get(
 connectionsRouter.put(
   "/accounts/:id/page",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const pageId = requireString(req.body, "pageId", "Trang");
 
     const account = await queryOne<{ id: string; platform: string }>(
       "SELECT id, platform FROM social_accounts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      [req.params.id, chu.id]
     );
     if (!account) throw new AppError("Không tìm thấy kênh này", 404);
     if (account.platform !== "facebook") {
@@ -611,7 +637,7 @@ connectionsRouter.put(
     // Chốt trạng thái hôm nay TRƯỚC khi đổi: ngày đổi vẫn tính cho trang cũ (sổ kênh theo ngày, chia tiền kênh).
     await ghiKenhTheoNgay();
     const trangMoi = await zernio.doiTrangDangGan(account.id, pageId);
-    await syncAccountsForUser(req.user!.id, req.user!.profileRef!);
+    await syncAccountsForUser(chu.id, chu.profileRef!);
 
     res.json({
       success: true,
@@ -626,9 +652,10 @@ connectionsRouter.put(
 connectionsRouter.delete(
   "/accounts/:id",
   route(async (req, res) => {
+    const chu = await chuTaiKhoan(req);
     const account = await queryOne<{ id: string }>(
       "SELECT id FROM social_accounts WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      [req.params.id, chu.id]
     );
     if (!account) {
       throw new AppError("Không tìm thấy tài khoản này", 404);

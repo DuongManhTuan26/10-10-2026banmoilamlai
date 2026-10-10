@@ -61,14 +61,18 @@ interface PostRow {
   scheduled_for: Date | null;
 }
 
+/**
+ * Đăng một bài của KHỐI NÃO (trang) — chỉ đăng lên kênh của đúng trang đó (docs/khoi-nao.md). Bản trước đăng theo tài
+ * khoản: bài không chọn kênh thì lên MỌI kênh của tài khoản, kể cả Fanpage của trang khác.
+ */
 export async function publishPost(
-  userId: number,
+  trangId: number,
   postId: number | string
 ): Promise<Record<string, unknown>> {
   const post = await queryOne<PostRow>(
     `SELECT id, content, status, target_account_ids, media, scheduled_for
-       FROM posts WHERE id = $1 AND user_id = $2`,
-    [postId, userId]
+       FROM posts WHERE id = $1 AND trang_id = $2`,
+    [postId, trangId]
   );
 
   if (!post) throw new AppError("Không tìm thấy bài viết", 404);
@@ -82,11 +86,11 @@ export async function publishPost(
   const targets = await query<{ id: string; platform: string }>(
     post.target_account_ids?.length
       ? `SELECT id, platform FROM social_accounts
-           WHERE user_id = $1 AND connected = TRUE AND id = ANY($2::text[])
+           WHERE trang_id = $1 AND connected = TRUE AND id = ANY($2::text[])
              AND platform <> 'metaads'`
       : `SELECT id, platform FROM social_accounts
-           WHERE user_id = $1 AND connected = TRUE AND platform <> 'metaads'`,
-    post.target_account_ids?.length ? [userId, post.target_account_ids] : [userId]
+           WHERE trang_id = $1 AND connected = TRUE AND platform <> 'metaads'`,
+    post.target_account_ids?.length ? [trangId, post.target_account_ids] : [trangId]
   );
 
   if (targets.rows.length === 0) {

@@ -178,7 +178,6 @@ export async function sendMessageSafely(params: {
     // Gửi lỗi có thể là dấu hiệu Trang đang bị hạn chế. Xét ngắt AI ngay.
     if (conversation.social_account_id) {
       await evaluateAutoPause({
-        userId: conversation.user_id,
         socialAccountId: conversation.social_account_id,
       }).catch(() => {});
     }

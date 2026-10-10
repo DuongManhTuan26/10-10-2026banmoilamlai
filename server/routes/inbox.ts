@@ -4,6 +4,7 @@ import { requireAuth } from "../auth.js";
 import { AppError, requireString, route } from "../http.js";
 import * as zernio from "../services/zernio.js";
 import { sendMessageSafely } from "../services/outbound.js";
+import { naoCua } from "../khoi-nao.js";
 
 export const inboxRouter = Router();
 
@@ -28,8 +29,9 @@ inboxRouter.get(
   route(async (req, res) => {
     const { accountId, status, search } = req.query;
 
-    const conditions: string[] = ["c.user_id = $1"];
-    const params: unknown[] = [req.user!.id];
+    // Hộp thư của KHỐI NÃO đang chọn — chỉ hội thoại của trang này (docs/khoi-nao.md).
+    const conditions: string[] = ["c.trang_id = $1"];
+    const params: unknown[] = [naoCua(req).trangId];
 
     /*
      * Phân trang, thay cho LIMIT 100 cắt cụt.
@@ -121,8 +123,8 @@ inboxRouter.get(
                             AND window_expires_at IS NOT NULL
                             AND window_expires_at > now()
                             AND window_expires_at < now() + interval '4 hours') AS expiring
-       FROM conversations WHERE user_id = $1`,
-      [req.user!.id]
+       FROM conversations WHERE trang_id = $1`,
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: row ?? {} });
   })
@@ -138,8 +140,8 @@ inboxRouter.get(
          FROM conversations c
          LEFT JOIN customers cu ON cu.id = c.customer_id
          LEFT JOIN social_accounts sa ON sa.id = c.social_account_id
-        WHERE c.id = $1 AND c.user_id = $2`,
-      [req.params.id, req.user!.id]
+        WHERE c.id = $1 AND c.trang_id = $2`,
+      [req.params.id, naoCua(req).trangId]
     );
 
     if (!conversation) throw new AppError("Không tìm thấy hội thoại", 404);
@@ -184,8 +186,8 @@ inboxRouter.post(
       status: string;
     }>(
       `SELECT id, social_account_id, window_expires_at, status
-         FROM conversations WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user!.id]
+         FROM conversations WHERE id = $1 AND trang_id = $2`,
+      [req.params.id, naoCua(req).trangId]
     );
 
     if (!conversation) throw new AppError("Không tìm thấy hội thoại", 404);
@@ -210,7 +212,7 @@ inboxRouter.post(
          ON CONFLICT (conversation_id, external_id) WHERE external_id IS NOT NULL
          DO NOTHING
          RETURNING id, sender_type, content, sent_at`,
-        [req.user!.id, conversation.id, result.externalId, result.text]
+        [naoCua(req).chuId, conversation.id, result.externalId, result.text]
       );
 
       // Nhân viên nhắn tay nghĩa là đã tiếp quản — AI ngừng tự trả lời.
@@ -245,9 +247,9 @@ inboxRouter.patch(
               ai_enabled = ($3 = 'ai'),
               handoff_reason = CASE WHEN $3 = 'ai' THEN NULL ELSE handoff_reason END,
               updated_at = now()
-        WHERE id = $1 AND user_id = $2
+        WHERE id = $1 AND trang_id = $2
         RETURNING id, status, ai_enabled`,
-      [req.params.id, req.user!.id, status]
+      [req.params.id, naoCua(req).trangId, status]
     );
 
     if (!updated) throw new AppError("Không tìm thấy hội thoại", 404);
@@ -264,10 +266,11 @@ inboxRouter.patch(
 inboxRouter.post(
   "/sync",
   route(async (req, res) => {
+    const nao = naoCua(req);
     const accounts = await query<{ id: string; platform: string }>(
       `SELECT id, platform FROM social_accounts
-        WHERE user_id = $1 AND connected = TRUE`,
-      [req.user!.id]
+        WHERE trang_id = $1 AND connected = TRUE`,
+      [nao.trangId]
     );
 
     if (accounts.rows.length === 0) {
@@ -300,20 +303,21 @@ inboxRouter.post(
         await transaction(async (client) => {
           const customer = await client.query<{ id: number }>(
             `INSERT INTO customers
-               (user_id, social_account_id, platform, participant_id, name, avatar_url)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (user_id, platform, participant_id) DO UPDATE SET
+               (user_id, trang_id, social_account_id, platform, participant_id, name, avatar_url)
+             VALUES ($1, $7, $2, $3, $4, $5, $6)
+             ON CONFLICT (trang_id, platform, participant_id) DO UPDATE SET
                name       = COALESCE(NULLIF(customers.name, ''), EXCLUDED.name),
                avatar_url = COALESCE(customers.avatar_url, EXCLUDED.avatar_url),
                updated_at = now()
              RETURNING id`,
             [
-              req.user!.id,
+              nao.chuId,
               account.id,
               conversation.platform ?? account.platform,
               conversation.participantId,
               conversation.participantName ?? "",
               conversation.participantPicture ?? null,
+              nao.trangId,
             ]
           );
 
@@ -328,7 +332,7 @@ inboxRouter.post(
                updated_at      = now()`,
             [
               conversation.id,
-              req.user!.id,
+              nao.chuId,
               account.id,
               customer.rows[0].id,
               conversation.platform ?? account.platform,

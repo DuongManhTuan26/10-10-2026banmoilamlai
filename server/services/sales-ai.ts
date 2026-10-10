@@ -89,9 +89,8 @@ export async function handleIncomingMessage(conversationId: string): Promise<boo
     `SELECT c.id, c.user_id, c.social_account_id, c.customer_id, c.platform, c.status,
             c.ai_enabled, c.window_expires_at, c.last_customer_message_at,
             c.handoff_at, c.holding_sent_at, c.sales_stage,
-            s.trang_id
+            c.trang_id
        FROM conversations c
-       LEFT JOIN social_accounts s ON s.id = c.social_account_id
       WHERE c.id = $1`,
     [conversationId]
   );
@@ -237,7 +236,7 @@ export async function handleIncomingMessage(conversationId: string): Promise<boo
     return false;
   }
 
-  const rules = await loadHandoffRules(conversation.user_id);
+  const rules = await loadHandoffRules(conversation.trang_id);
   // Đã đọc ở trên rồi, không truy vấn lại.
   const tuChu = tuChuSom;
 
@@ -626,10 +625,11 @@ export function laySoDau(v: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-async function loadHandoffRules(userId: number): Promise<HandoffRule[]> {
+/** Luật nhường người của KHỐI NÃO (trang) — mỗi trang một bộ (docs/khoi-nao.md). */
+async function loadHandoffRules(trangId: number | null): Promise<HandoffRule[]> {
   const rows = await query<HandoffRule>(
-    "SELECT rule_key, enabled, config FROM handoff_rules WHERE user_id = $1",
-    [userId]
+    "SELECT rule_key, enabled, config FROM handoff_rules WHERE trang_id = $1",
+    [trangId]
   );
   return rows.rows;
 }
@@ -1360,9 +1360,10 @@ export async function runDueBoSot(): Promise<number> {
 }
 
 export async function runDueFollowUps(): Promise<number> {
-  const shops = await query<{ user_id: number; settings: Record<string, unknown> }>(
-    `SELECT user_id, settings FROM ai_configs
-      WHERE kind = 'sales' AND settings->'tuChu'->>'bat' = 'true'`
+  // Mỗi KHỐI NÃO (trang) một cài đặt tự chủ — chỉ nhắc khách của đúng trang đó (docs/khoi-nao.md).
+  const shops = await query<{ trang_id: number; settings: Record<string, unknown> }>(
+    `SELECT trang_id, settings FROM ai_configs
+      WHERE kind = 'sales' AND trang_id IS NOT NULL AND settings->'tuChu'->>'bat' = 'true'`
   );
 
   let daNhac = 0;
@@ -1375,11 +1376,11 @@ export async function runDueFollowUps(): Promise<number> {
     >(
       `SELECT c.id, c.user_id, c.social_account_id, c.customer_id, c.platform,
               c.status, c.ai_enabled, c.window_expires_at, c.last_customer_message_at,
-              c.handoff_at, c.holding_sent_at, c.sales_stage, c.nhac_lai_count,
+              c.handoff_at, c.holding_sent_at, c.sales_stage, c.nhac_lai_count, c.trang_id,
               (SELECT max(m.sent_at) FROM messages m
                 WHERE m.conversation_id = c.id AND m.sender_type = 'ai') AS last_ai_at
          FROM conversations c
-        WHERE c.user_id = $1
+        WHERE c.trang_id = $1
           AND c.status = 'ai'
           AND c.ai_enabled = TRUE
           AND c.nhac_lai_count < $2
@@ -1388,7 +1389,7 @@ export async function runDueFollowUps(): Promise<number> {
                 SELECT 1 FROM orders o
                  WHERE o.conversation_id = c.id AND o.status <> 'cancelled')
         LIMIT 20`,
-      [shop.user_id, tuChu.nhacToiDa]
+      [shop.trang_id, tuChu.nhacToiDa]
     );
 
     for (const hoi of ungVien.rows) {

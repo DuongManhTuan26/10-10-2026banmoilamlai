@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { query, queryOne } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { layTrangDangChon } from "../services/trang.js";
+import { naoCua } from "../khoi-nao.js";
 import { AppError, requireString, route } from "../http.js";
 import * as ads from "../services/ads.js";
 import { chatJson, asRecord, optionalString } from "../services/ai.js";
@@ -20,7 +20,8 @@ adsRouter.use(requireAuth);
  * Trả về cả hai định danh vì Zernio cần accountId cho một số endpoint và
  * adAccountId cho phần lớn còn lại.
  */
-async function resolveAdAccount(userId: number): Promise<{
+/** Tài khoản quảng cáo của KHỐI NÃO (trang) — mỗi trang dùng kết nối quảng cáo của chính nó (docs/khoi-nao.md). */
+async function resolveAdAccount(trangId: number): Promise<{
   accountId: string;
   adAccountId: string;
   account: ads.AdAccount;
@@ -31,9 +32,9 @@ async function resolveAdAccount(userId: number): Promise<{
 } | null> {
   const row = await queryOne<{ id: string; ad_account_ref: string | null }>(
     `SELECT id, ad_account_ref FROM social_accounts
-      WHERE user_id = $1 AND platform = 'metaads' AND connected = TRUE
+      WHERE trang_id = $1 AND platform = 'metaads' AND connected = TRUE
       ORDER BY created_at LIMIT 1`,
-    [userId]
+    [trangId]
   );
   if (!row) return null;
 
@@ -69,7 +70,7 @@ async function resolveAdAccount(userId: number): Promise<{
 adsRouter.get(
   "/overview",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
 
     if (!resolved) {
       res.json({
@@ -168,9 +169,9 @@ adsRouter.put(
 
     const kenh = await queryOne<{ id: string }>(
       `SELECT id FROM social_accounts
-        WHERE user_id = $1 AND platform = 'metaads' AND connected = TRUE
+        WHERE trang_id = $1 AND platform = 'metaads' AND connected = TRUE
         ORDER BY created_at LIMIT 1`,
-      [req.user!.id]
+      [naoCua(req).trangId]
     );
     if (!kenh) throw new AppError("Chưa kết nối tài khoản quảng cáo nào", 404);
 
@@ -198,9 +199,9 @@ adsRouter.get(
     const rows = await query(
       `SELECT id, content, platform_post_ref, published_at, stats, platform_urls
          FROM posts
-        WHERE user_id = $1 AND status = 'published' AND platform_post_ref IS NOT NULL
+        WHERE trang_id = $1 AND status = 'published' AND platform_post_ref IS NOT NULL
         ORDER BY published_at DESC LIMIT 50`,
-      [req.user!.id]
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: rows.rows });
   })
@@ -218,7 +219,7 @@ adsRouter.post(
       : [];
     if (campaignIds.length === 0) throw new AppError("Chưa chọn chiến dịch nào");
 
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const result = await ads.setCampaignStatus({
@@ -229,7 +230,7 @@ adsRouter.post(
     });
     // Sổ thay đổi: quảng cáo đổi qua API nhà cung cấp, trigger không thấy — ghi tay SAU khi thành công.
     for (const id of campaignIds) {
-      await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_chien_dich", banGhi: id, hanhDong: "sua", sau: { trang_thai: status }, nguon: "nguoi_dung" });
+      await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_chien_dich", banGhi: id, hanhDong: "sua", sau: { trang_thai: status }, nguon: "nguoi_dung" });
     }
 
     res.json({ success: true, data: result });
@@ -255,7 +256,7 @@ adsRouter.patch(
     const budgetType = body.budgetType === "lifetime" ? "lifetime" : "daily";
     const platform = typeof body.platform === "string" ? body.platform : "facebook";
 
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     try {
@@ -266,7 +267,7 @@ adsRouter.patch(
         budgetType,
         accountId: resolved.accountId,
       });
-      await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_chien_dich", banGhi: req.params.id, hanhDong: "sua", sau: { ngan_sach: amount, loai_ngan_sach: budgetType }, nguon: "nguoi_dung" });
+      await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_chien_dich", banGhi: req.params.id, hanhDong: "sua", sau: { ngan_sach: amount, loai_ngan_sach: budgetType }, nguon: "nguoi_dung" });
       res.json({ success: true, data: result });
     } catch (error) {
       /*
@@ -297,7 +298,7 @@ adsRouter.patch(
 adsRouter.get(
   "/campaigns/:id/ad-sets",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const platform = typeof req.query.platform === "string" ? req.query.platform : "facebook";
@@ -331,7 +332,7 @@ adsRouter.patch(
      * Bản GET thì CÓ nhận accountId, nên đọc trước bằng tài khoản của shop
      * đang đăng nhập: đọc được thì đúng là của họ, không đọc được thì thôi.
      */
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     let adSet: Record<string, unknown>;
@@ -352,7 +353,7 @@ adsRouter.patch(
             ? adSet.platform
             : "facebook",
     });
-    await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_nhom", banGhi: req.params.id, hanhDong: "sua", sau: { ngan_sach: amount, loai_ngan_sach: body.budgetType === "lifetime" ? "lifetime" : "daily" }, nguon: "nguoi_dung" });
+    await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_nhom", banGhi: req.params.id, hanhDong: "sua", sau: { ngan_sach: amount, loai_ngan_sach: body.budgetType === "lifetime" ? "lifetime" : "daily" }, nguon: "nguoi_dung" });
     res.json({ success: true, data: result });
   })
 );
@@ -360,7 +361,7 @@ adsRouter.patch(
 adsRouter.post(
   "/campaigns/:id/duplicate",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const result = await ads.duplicateCampaign({
@@ -368,7 +369,7 @@ adsRouter.post(
       accountId: resolved.accountId,
       adAccountId: resolved.adAccountId,
     });
-    await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_chien_dich", banGhi: req.params.id, hanhDong: "them", sau: { nhan_ban_tu: req.params.id }, nguon: "nguoi_dung" });
+    await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_chien_dich", banGhi: req.params.id, hanhDong: "them", sau: { nhan_ban_tu: req.params.id }, nguon: "nguoi_dung" });
     res.json({ success: true, data: result });
   })
 );
@@ -376,7 +377,7 @@ adsRouter.post(
 adsRouter.get(
   "/campaigns/:id/analytics",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const data = await ads.getCampaignAnalytics({
@@ -405,15 +406,15 @@ adsRouter.post(
     }
 
     const post = await queryOne<{ platform_post_ref: string | null }>(
-      "SELECT platform_post_ref FROM posts WHERE id = $1 AND user_id = $2",
-      [postId, req.user!.id]
+      "SELECT platform_post_ref FROM posts WHERE id = $1 AND trang_id = $2",
+      [postId, naoCua(req).trangId]
     );
     if (!post) throw new AppError("Không tìm thấy bài viết", 404);
     if (!post.platform_post_ref) {
       throw new AppError("Bài này chưa được đăng nên chưa thể quảng cáo", 409);
     }
 
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     // Meta yêu cầu ngân sách tối thiểu theo từng tài khoản và loại tiền.
@@ -434,7 +435,7 @@ adsRouter.post(
       objective: typeof body.objective === "string" ? body.objective : undefined,
       targeting: body.targeting,
     });
-    await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_day_bai", banGhi: String(postId), hanhDong: "them", sau: { bai: postId, ngan_sach_ngay: dailyBudget, so_ngay: durationDays, doi_tuong: body.targeting ?? null }, nguon: "nguoi_dung" });
+    await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_day_bai", banGhi: String(postId), hanhDong: "them", sau: { bai: postId, ngan_sach_ngay: dailyBudget, so_ngay: durationDays, doi_tuong: body.targeting ?? null }, nguon: "nguoi_dung" });
 
     res.status(201).json({ success: true, data: result });
   })
@@ -446,7 +447,7 @@ adsRouter.post(
     const name = requireString(req.body, "name", "tên tệp đối tượng");
     const subtype = requireString(req.body, "subtype", "loại tệp");
 
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const result = await ads.createAudience({
@@ -457,7 +458,7 @@ adsRouter.post(
       description: typeof req.body?.description === "string" ? req.body.description : undefined,
       extra: req.body?.extra,
     });
-    await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_doi_tuong", banGhi: null, hanhDong: "them", sau: { ten: name, loai: subtype }, nguon: "nguoi_dung" });
+    await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_doi_tuong", banGhi: null, hanhDong: "them", sau: { ten: name, loai: subtype }, nguon: "nguoi_dung" });
 
     res.status(201).json({ success: true, data: result });
   })
@@ -466,7 +467,7 @@ adsRouter.post(
 adsRouter.put(
   "/audiences/:id",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
@@ -486,7 +487,7 @@ adsRouter.put(
       name,
       description,
     });
-    await ghiThayDoiNgoai({ userId: req.user!.id, bang: "quang_cao_doi_tuong", banGhi: req.params.id, hanhDong: "sua", sau: { ten: name ?? null, mo_ta: description ?? null }, nguon: "nguoi_dung" });
+    await ghiThayDoiNgoai({ userId: naoCua(req).chuId, trangId: naoCua(req).trangId, bang: "quang_cao_doi_tuong", banGhi: req.params.id, hanhDong: "sua", sau: { ten: name ?? null, mo_ta: description ?? null }, nguon: "nguoi_dung" });
 
     res.json({ success: true, data: result });
   })
@@ -495,7 +496,7 @@ adsRouter.put(
 adsRouter.post(
   "/reach-estimate",
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const data = await ads.estimateReach({
@@ -519,7 +520,7 @@ adsRouter.post(
   "/analyze",
   chanLamDungAI,
   route(async (req, res) => {
-    const resolved = await resolveAdAccount(req.user!.id);
+    const resolved = await resolveAdAccount(naoCua(req).trangId);
     if (!resolved) throw new AppError("Chưa kết nối tài khoản quảng cáo", 409);
 
     const [campaigns, insights] = await Promise.all([
@@ -553,19 +554,19 @@ adsRouter.post(
 
     const config = await queryOne<{ system_prompt: string }>(
       "SELECT system_prompt FROM ai_configs WHERE trang_id = $1 AND kind = 'ads'",
-      [await layTrangDangChon(req.user!.id, resolved.accountId)]
+      [naoCua(req).trangId]
     );
 
     // Tài liệu chủ shop đã dạy riêng cho AI quảng cáo.
     const knowledge = await loadKnowledge(
-      await layTrangDangChon(req.user!.id, resolved.accountId),
+      naoCua(req).trangId,
       "ads"
     );
 
     const result = await chatJson({
       task: "ads",
       viec: "phan_tich_qc",
-      userId: req.user!.id,
+      userId: naoCua(req).chuId,
       messages: [
         {
           role: "system",

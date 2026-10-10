@@ -4,6 +4,7 @@ import { requireAuth } from "../auth.js";
 import { AppError, requireString, route, chiNhanMaSo } from "../http.js";
 import { gopVaoTongChi, taoDon } from "../services/orders.js";
 import { DAU_NGAY_VN, DAU_THANG_VN } from "../moc-thoi-gian.js";
+import { naoCua } from "../khoi-nao.js";
 
 export const ordersRouter = Router();
 
@@ -20,8 +21,9 @@ ordersRouter.get(
   "/",
   route(async (req, res) => {
     const { status, search } = req.query;
-    const conditions = ["o.user_id = $1"];
-    const params: unknown[] = [req.user!.id];
+    // Đơn của KHỐI NÃO đang chọn (docs/khoi-nao.md).
+    const conditions = ["o.trang_id = $1"];
+    const params: unknown[] = [naoCua(req).trangId];
 
     if (typeof status === "string" && status !== "" && status !== "all") {
       params.push(status);
@@ -85,8 +87,8 @@ ordersRouter.get(
                 WHERE created_at >= ${DAU_THANG_VN} - interval '1 month'
                   AND created_at <  ${DAU_THANG_VN}
                   AND status <> 'cancelled'), 0)                     AS last_month_revenue
-         FROM orders WHERE user_id = $1`,
-      [req.user!.id]
+         FROM orders WHERE trang_id = $1`,
+      [naoCua(req).trangId]
     );
 
     res.json({ success: true, data: rows.rows, summary });
@@ -101,32 +103,18 @@ ordersRouter.post(
     // đúng một đường mã — xem phần đầu tệp đó để biết vì sao.
     const conversationId = typeof body.conversationId === "string" ? body.conversationId : null;
     /*
-     * Đơn tạo tay KHÔNG có hội thoại: phải biết thuộc trang nào. Một trang → trang đó. Từ hai trang → bắt buộc chọn
-     * (kênh đang chọn gửi qua đầu X-Kenh, máy chủ kiểm kênh thuộc đúng tài khoản). Có hội thoại thì trang lấy theo
-     * kênh hội thoại trong taoDon.
+     * Đơn luôn thuộc KHỐI NÃO đang chọn. Có hội thoại thì hội thoại phải thuộc đúng trang này — không lên đơn của trang
+     * này vào hội thoại của trang khác.
      */
-    let trangId: number | null = null;
-    if (!conversationId) {
-      const ds = await query<{ id: number }>("SELECT id FROM trang WHERE user_id = $1", [req.user!.id]);
-      if (ds.rows.length === 1) trangId = ds.rows[0].id;
-      else if (ds.rows.length > 1) {
-        const kenh = req.get("x-kenh");
-        const r = kenh
-          ? await queryOne<{ trang_id: number | null }>(
-              "SELECT trang_id FROM social_accounts WHERE id = $1 AND user_id = $2",
-              [kenh, req.user!.id]
-            )
-          : null;
-        if (!r?.trang_id) {
-          throw new AppError("Tài khoản có nhiều trang — chọn trang (kênh) trước khi tạo đơn.", 400);
-        }
-        trangId = r.trang_id;
-      }
+    const nao = naoCua(req);
+    if (conversationId) {
+      const dung = await queryOne("SELECT 1 FROM conversations WHERE id = $1 AND trang_id = $2", [conversationId, nao.trangId]);
+      if (!dung) throw new AppError("Không tìm thấy hội thoại", 404);
     }
     const order = await taoDon({
-      userId: req.user!.id,
+      userId: nao.chuId,
       conversationId,
-      trangId,
+      trangId: nao.trangId,
       customerName: typeof body.customerName === "string" ? body.customerName : null,
       phone: typeof body.phone === "string" ? body.phone : null,
       address: typeof body.address === "string" ? body.address : null,
@@ -147,7 +135,7 @@ ordersRouter.patch(
   route(async (req, res) => {
     const body = req.body ?? {};
     const fields: string[] = [];
-    const params: unknown[] = [req.params.id, req.user!.id];
+    const params: unknown[] = [req.params.id, naoCua(req).trangId];
 
     const assign = (column: string, value: unknown) => {
       params.push(value);
@@ -168,8 +156,8 @@ ordersRouter.patch(
 
     if (body.quantity !== undefined || body.unitPrice !== undefined) {
       const current = await queryOne<{ quantity: number; unit_price: number }>(
-        "SELECT quantity, unit_price FROM orders WHERE id = $1 AND user_id = $2",
-        [req.params.id, req.user!.id]
+        "SELECT quantity, unit_price FROM orders WHERE id = $1 AND trang_id = $2",
+        [req.params.id, naoCua(req).trangId]
       );
       if (!current) throw new AppError("Không tìm thấy đơn hàng", 404);
 
@@ -212,14 +200,14 @@ ordersRouter.patch(
       total: string;
       customer_id: number | null;
     }>(
-      "SELECT status, total, customer_id FROM orders WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user!.id]
+      "SELECT status, total, customer_id FROM orders WHERE id = $1 AND trang_id = $2",
+      [req.params.id, naoCua(req).trangId]
     );
     if (!truoc) throw new AppError("Không tìm thấy đơn hàng", 404);
 
     const updated = await queryOne(
       `UPDATE orders SET ${fields.join(", ")}, updated_at = now()
-        WHERE id = $1 AND user_id = $2 RETURNING *`,
+        WHERE id = $1 AND trang_id = $2 RETURNING *`,
       params
     );
 

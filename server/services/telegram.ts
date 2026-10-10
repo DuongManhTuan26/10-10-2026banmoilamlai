@@ -1,3 +1,4 @@
+import { trangHienTai } from "./ngu-canh-trang.js";
 import crypto from "node:crypto";
 import { query, queryOne } from "../db.js";
 import { env } from "../env.js";
@@ -62,10 +63,13 @@ export function escapeHtml(value: unknown): string {
 export async function sendTelegramMessage(
   userId: number,
   text: string,
-  kind = "general"
+  kind = "general",
+  /** Khối não (trang) của tin. Bỏ trống = trang đang làm việc của luồng hiện tại (ngu-canh-trang.ts). */
+  trangId?: number | null
 ): Promise<boolean> {
   const config = await loadConfig(userId);
   if (!config) return false;
+  const trang = trangId !== undefined ? trangId : await trangHienTai();
 
   try {
     const response = await fetch(
@@ -86,14 +90,15 @@ export async function sendTelegramMessage(
     const body = (await response.json()) as { ok?: boolean; description?: string };
 
     await query(
-      `INSERT INTO telegram_logs (user_id, kind, content, status, error)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO telegram_logs (user_id, kind, content, status, error, trang_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         userId,
         kind,
         text.slice(0, 2_000),
         body.ok ? "sent" : "failed",
         body.ok ? null : (body.description ?? `HTTP ${response.status}`),
+        trang,
       ]
     );
 
@@ -101,9 +106,9 @@ export async function sendTelegramMessage(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await query(
-      `INSERT INTO telegram_logs (user_id, kind, content, status, error)
-       VALUES ($1, $2, $3, 'failed', $4)`,
-      [userId, kind, text.slice(0, 2_000), message]
+      `INSERT INTO telegram_logs (user_id, kind, content, status, error, trang_id)
+       VALUES ($1, $2, $3, 'failed', $4, $5)`,
+      [userId, kind, text.slice(0, 2_000), message, trang]
     ).catch(() => {});
     return false;
   }
@@ -134,7 +139,7 @@ export async function sendOrderReport(
     order.closed_by === "ai" ? "🤖 Do AI chốt" : "👤 Do nhân viên chốt",
   ];
 
-  const sent = await sendTelegramMessage(userId, lines.join("\n"), "new_order");
+  const sent = await sendTelegramMessage(userId, lines.join("\n"), "new_order", (order.trang_id as number | null) ?? null);
 
   if (sent) {
     await query("UPDATE orders SET telegram_sent_at = now() WHERE id = $1", [order.id]);

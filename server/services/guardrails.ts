@@ -104,13 +104,14 @@ const DEFAULT_CONFIG: GuardrailConfig = {
   auto_pause_minutes: 60,
 };
 
-export async function loadConfig(userId: number): Promise<GuardrailConfig> {
+/** Hàng rào là của KHỐI NÃO (trang) — mỗi trang một bộ (docs/khoi-nao.md). */
+export async function loadConfig(trangId: number | null): Promise<GuardrailConfig> {
   const row = await queryOne<GuardrailConfig>(
     `SELECT disclosure_enabled, disclosure_text, max_sends_per_minute,
             max_ai_sends_per_hour, auto_pause_enabled, failure_rate_threshold,
             failure_min_samples, auto_pause_minutes
-       FROM guardrail_configs WHERE user_id = $1`,
-    [userId]
+       FROM guardrail_configs WHERE trang_id = $1`,
+    [trangId]
   );
   return row ?? DEFAULT_CONFIG;
 }
@@ -175,14 +176,14 @@ let nhoSoShop = { luc: 0, so: 1 };
 async function soShopDangGui(): Promise<number> {
   if (Date.now() - nhoSoShop.luc < 30_000) return nhoSoShop.so;
   const row = await queryOne<{ n: number }>(
-    `SELECT COUNT(DISTINCT user_id)::int AS n FROM send_attempts
+    `SELECT COUNT(DISTINCT trang_id)::int AS n FROM send_attempts
       WHERE created_at > now() - interval '5 minutes'`
   ).catch(() => null);
   nhoSoShop = { luc: Date.now(), so: Math.max(1, row?.n ?? 1) };
   return nhoSoShop.so;
 }
 
-export async function effectiveRateLimit(userId: number): Promise<{
+export async function effectiveRateLimit(trangId: number | null): Promise<{
   perMinute: number;
   source: "live" | "policy";
   remaining: number | null;
@@ -212,8 +213,8 @@ export async function effectiveRateLimit(userId: number): Promise<{
   }
 
   const row = await queryOne<{ n: number }>(
-    "SELECT COUNT(*)::int AS n FROM social_accounts WHERE user_id = $1 AND connected = TRUE",
-    [userId]
+    "SELECT COUNT(*)::int AS n FROM social_accounts WHERE trang_id = $1 AND connected = TRUE",
+    [trangId]
   );
   return {
     perMinute: policyLimitPerMinute(row?.n ?? 0),
@@ -236,7 +237,7 @@ export async function checkOutbound(params: {
   skipRateLimit?: boolean;
 }): Promise<OutboundDecision> {
   const conversation = await queryOne<{
-    user_id: number;
+    trang_id: number | null;
     social_account_id: string | null;
     platform: string;
     last_customer_message_at: Date | null;
@@ -244,7 +245,7 @@ export async function checkOutbound(params: {
     ai_paused_until: Date | null;
     ai_pause_reason: string | null;
   }>(
-    `SELECT c.user_id, c.social_account_id, c.platform,
+    `SELECT c.trang_id, c.social_account_id, c.platform,
             c.last_customer_message_at, c.disclosure_sent_at,
             a.ai_paused_until, a.ai_pause_reason
        FROM conversations c
@@ -269,7 +270,7 @@ export async function checkOutbound(params: {
     };
   }
 
-  const config = await loadConfig(conversation.user_id);
+  const config = await loadConfig(conversation.trang_id);
 
   // Mốc tính cửa sổ: tin cuối cùng CỦA KHÁCH. Không có mốc thì coi như đã
   // quá hạn — thà chặn oan còn hơn gửi sai và mất Trang.
@@ -324,7 +325,7 @@ export async function checkOutbound(params: {
      * Ưu tiên con số SỐNG từ header x-ratelimit-limit; chưa có header thì dùng
      * bậc chính sách theo số tài khoản kết nối.
      */
-    const policy = await effectiveRateLimit(conversation.user_id);
+    const policy = await effectiveRateLimit(conversation.trang_id);
     const perMinuteCap = Math.min(config.max_sends_per_minute, policy.perMinute);
 
     // Zernio còn báo chính xác còn lại bao nhiêu. Hết hạn mức thật thì chặn
@@ -344,9 +345,9 @@ export async function checkOutbound(params: {
     }
     const recent = await queryOne<{ n: number }>(
       `SELECT COUNT(*)::int AS n FROM send_attempts
-        WHERE user_id = $1 AND decision = 'allowed'
+        WHERE trang_id = $1 AND decision = 'allowed'
           AND created_at > now() - interval '1 minute'`,
-      [conversation.user_id]
+      [conversation.trang_id]
     );
 
     if ((recent?.n ?? 0) >= perMinuteCap) {
@@ -366,9 +367,9 @@ export async function checkOutbound(params: {
       const hourlyCap = config.max_ai_sends_per_hour;
       const hourly = await queryOne<{ n: number }>(
         `SELECT COUNT(*)::int AS n FROM send_attempts
-          WHERE user_id = $1 AND actor = 'ai' AND decision = 'allowed'
+          WHERE trang_id = $1 AND actor = 'ai' AND decision = 'allowed'
             AND created_at > now() - interval '1 hour'`,
-        [conversation.user_id]
+        [conversation.trang_id]
       );
 
       if ((hourly?.n ?? 0) >= hourlyCap) {
@@ -409,7 +410,7 @@ export async function checkOutbound(params: {
       `SELECT 1
          FROM conversations c
          JOIN customers k ON k.id = c.customer_id
-         JOIN comments cm ON cm.user_id = c.user_id AND cm.author_id = k.participant_id
+         JOIN comments cm ON cm.trang_id = c.trang_id AND cm.author_id = k.participant_id
         WHERE c.id = $1
           AND cm.dm_disclosed = TRUE
           AND cm.private_replied_at > now() - interval '7 days'
@@ -460,10 +461,11 @@ export async function checkOutbound(params: {
  */
 export async function xinPhepGuiBinhLuan(
   userId: number,
+  trangId: number | null,
   socialAccountId: string | null
 ): Promise<{ duoc: boolean; lyDo: string }> {
-  const config = await loadConfig(userId);
-  const policy = await effectiveRateLimit(userId);
+  const config = await loadConfig(trangId);
+  const policy = await effectiveRateLimit(trangId);
   const tran = Math.min(config.max_sends_per_minute, policy.perMinute);
 
   // Zernio báo chính xác còn lại bao nhiêu thì tin con số đó trước.
@@ -473,9 +475,9 @@ export async function xinPhepGuiBinhLuan(
 
   const ganDay = await queryOne<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM send_attempts
-      WHERE user_id = $1 AND decision = 'allowed'
+      WHERE trang_id = $1 AND decision = 'allowed'
         AND created_at > now() - interval '1 minute'`,
-    [userId]
+    [trangId]
   );
 
   if ((ganDay?.n ?? 0) >= tran) {
@@ -489,6 +491,7 @@ export async function xinPhepGuiBinhLuan(
   // vẫn thấy bộ đếm cũ và cho qua thêm một loạt nữa.
   await recordAttempt({
     userId,
+    trangId,
     socialAccountId,
     conversationId: null,
     actor: "ai",
@@ -500,6 +503,8 @@ export async function xinPhepGuiBinhLuan(
 
 export async function recordAttempt(params: {
   userId: number;
+  /** Trang của lượt gửi. Bỏ trống thì tự suy (hội thoại → kênh → trang mặc định). */
+  trangId?: number | null;
   socialAccountId: string | null;
   conversationId: string | null;
   actor: Actor;
@@ -512,8 +517,9 @@ export async function recordAttempt(params: {
   const row = await queryOne<{ id: number }>(
     `INSERT INTO send_attempts
        (user_id, social_account_id, conversation_id, actor, decision,
-        block_reason, message_tag, outcome, error_code)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        block_reason, message_tag, outcome, error_code, trang_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+             COALESCE($10, (SELECT trang_id FROM social_accounts WHERE id = $2)))
      RETURNING id`,
     [
       params.userId,
@@ -525,6 +531,7 @@ export async function recordAttempt(params: {
       params.messageTag ?? null,
       params.outcome ?? "pending",
       params.errorCode ?? null,
+      params.trangId ?? null,
     ]
   );
   return row!.id;
@@ -561,10 +568,10 @@ export async function markDisclosureSent(conversationId: string): Promise<void> 
  * Gọi sau mỗi lần gửi thất bại.
  */
 export async function evaluateAutoPause(params: {
-  userId: number;
   socialAccountId: string;
 }): Promise<{ paused: boolean; reason?: string; until?: Date }> {
-  const config = await loadConfig(params.userId);
+  const kenh = await queryOne<{ trang_id: number | null }>("SELECT trang_id FROM social_accounts WHERE id = $1", [params.socialAccountId]);
+  const config = await loadConfig(kenh?.trang_id ?? null);
   if (!config.auto_pause_enabled) return { paused: false };
 
   /*
@@ -622,12 +629,12 @@ export async function evaluateAutoPause(params: {
 }
 
 /** Mở lại AI cho một kênh trước thời hạn, do chủ shop chủ động. */
-export async function resumeAi(socialAccountId: string, userId: number): Promise<boolean> {
+export async function resumeAi(socialAccountId: string, trangId: number): Promise<boolean> {
   const result = await query(
     `UPDATE social_accounts
         SET ai_paused_until = NULL, ai_pause_reason = NULL, updated_at = now()
-      WHERE id = $1 AND user_id = $2`,
-    [socialAccountId, userId]
+      WHERE id = $1 AND trang_id = $2`,
+    [socialAccountId, trangId]
   );
   return (result.rowCount ?? 0) > 0;
 }
@@ -658,8 +665,8 @@ export function commentReplyAllowed(commentCreatedAt: Date | null): {
 }
 
 /** Trạng thái hàng rào để hiện trên giao diện. */
-export async function guardrailStatus(userId: number): Promise<Record<string, unknown>> {
-  const config = await loadConfig(userId);
+export async function guardrailStatus(trangId: number): Promise<Record<string, unknown>> {
+  const config = await loadConfig(trangId);
 
   const usage = await queryOne<{
     last_minute: number;
@@ -683,8 +690,8 @@ export async function guardrailStatus(userId: number): Promise<Record<string, un
                           AND created_at > now() - interval '1 hour')::int   AS decided_last_hour,
        COUNT(*) FILTER (WHERE decision = 'blocked'
                           AND created_at > now() - interval '1 day')::int    AS blocked_last_day
-     FROM send_attempts WHERE user_id = $1`,
-    [userId]
+     FROM send_attempts WHERE trang_id = $1`,
+    [trangId]
   );
 
   const paused = await query<{
@@ -695,21 +702,21 @@ export async function guardrailStatus(userId: number): Promise<Record<string, un
   }>(
     `SELECT id, display_name, ai_paused_until, ai_pause_reason
        FROM social_accounts
-      WHERE user_id = $1 AND ai_paused_until > now()`,
-    [userId]
+      WHERE trang_id = $1 AND ai_paused_until > now()`,
+    [trangId]
   );
 
   const blockedBreakdown = await query<{ block_reason: string; n: number }>(
     `SELECT block_reason, COUNT(*)::int AS n FROM send_attempts
-      WHERE user_id = $1 AND decision = 'blocked'
+      WHERE trang_id = $1 AND decision = 'blocked'
         AND created_at > now() - interval '7 days'
       GROUP BY block_reason ORDER BY n DESC`,
-    [userId]
+    [trangId]
   );
 
   const totalHour = usage?.total_last_hour ?? 0;
 
-  const policy = await effectiveRateLimit(userId);
+  const policy = await effectiveRateLimit(trangId);
 
   return {
     config,

@@ -64,11 +64,11 @@ export async function themVaoThuVien(p: { userId: number; trangId: number; loai:
   return moi!;
 }
 
-/** Tệp ảnh để hiện trên giao diện — chỉ chủ tài khoản đọc được. */
-export async function docAnhThuVien(userId: number, id: number): Promise<{ kieu: string; du_lieu: Buffer }> {
+/** Tệp ảnh để hiện trên giao diện — chỉ khối não (trang) của ảnh đọc được. */
+export async function docAnhThuVien(trangId: number, id: number): Promise<{ kieu: string; du_lieu: Buffer }> {
   const r = await queryOne<{ kieu: string; du_lieu: Buffer }>(
-    "SELECT kieu, du_lieu FROM thu_vien_anh WHERE id = $1 AND user_id = $2",
-    [id, userId]
+    "SELECT kieu, du_lieu FROM thu_vien_anh WHERE id = $1 AND trang_id = $2",
+    [id, trangId]
   );
   if (!r) throw new AppError("Không tìm thấy ảnh trong thư viện.", 404);
   return r;

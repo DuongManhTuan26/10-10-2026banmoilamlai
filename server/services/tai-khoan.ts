@@ -59,42 +59,11 @@ export function rutGonTen(ten: string): string {
     .slice(0, 24);
 }
 
-const DEFAULT_AI_CONFIGS: Array<{
-  kind: string;
-  prompt: string;
-}> = [
-  /*
-   * Tài khoản mới sinh ra với BỘ NÃO TRỐNG.
-   *
-   * Trước đây mỗi tài khoản mới được nhét sẵn bốn lời dặn mẫu — "Bạn là nhân
-   * viên bán hàng của shop...". Nghe thì tiện, nhưng nó là lời dặn của MỘT cái
-   * shop tưởng tượng, không phải của shop này. Hậu quả đã thấy tận mắt: tài
-   * khoản gắn Trang bán kem dưỡng tay mà vai trò AI vẫn là "chuyên viên tư vấn
-   * tài chính" — chữ mặc định nằm đó nhiều tháng, không ai sửa vì nhìn qua
-   * tưởng đã cài rồi.
-   *
-   * Trống thì chủ shop buộc phải tự viết, và họ là người duy nhất biết shop
-   * mình bán gì. Giao diện có sẵn ví dụ viết mờ để hướng dẫn, nhưng ví dụ mờ
-   * KHÔNG phải nội dung — không lưu vào database, không gửi cho AI.
-   *
-   * Vẫn tạo đủ bốn dòng để giao diện có chỗ ghi vào, chỉ để rỗng phần chữ.
-   */
-  { kind: "sales", prompt: "" },
-  { kind: "content", prompt: "" },
-  { kind: "ads", prompt: "" },
-  { kind: "analytics", prompt: "" },
-];
-
-/** Các quy tắc chuyển hội thoại cho người thật, bật sẵn theo thực tế bán hàng. */
-const DEFAULT_HANDOFF_RULES: Array<{ key: string; enabled: boolean; config?: object }> = [
-  { key: "complaint", enabled: true },
-  { key: "ask_human", enabled: true },
-  { key: "discount", enabled: true },
-  { key: "shipping", enabled: true },
-  { key: "unsure", enabled: true },
-  { key: "media", enabled: false },
-  { key: "too_many_turns", enabled: true, config: { maxTurns: 8 } },
-];
+/*
+ * Bộ não của trang (4 dòng cài đặt AI để trống lời dặn, luật nhường người, hàng rào) do DATABASE tự dựng khi trang được
+ * tạo — migration 048 (trigger dung_khoi_nao). Một chỗ duy nhất cho mọi đường tạo trang, kể cả nối thêm Fanpage.
+ * Lời dặn để trống có chủ đích: chỉ chủ shop biết shop mình bán gì (xem lịch sử tệp này).
+ */
 
 export interface TaiKhoanMoi {
   id: number;
@@ -168,27 +137,10 @@ export async function taoTaiKhoan(params: {
      * profile_ref là khoá duy nhất và không được để null.
      */
     if (!laChuChuoi) {
-      const trangMoi = await client.query<{ id: number }>(
-        `INSERT INTO trang (user_id, profile_ref, ten)
-         VALUES ($1, $2, $3) RETURNING id`,
-        [userId, `cho-cap-${userId}`, "Trang đầu tiên"]
-      );
-      const trangId = trangMoi.rows[0].id;
-
-      for (const config of DEFAULT_AI_CONFIGS) {
-        await client.query(
-          `INSERT INTO ai_configs (user_id, trang_id, kind, system_prompt)
-           VALUES ($1, $2, $3, $4)`,
-          [userId, trangId, config.kind, config.prompt]
-        );
-      }
-    }
-
-    for (const rule of DEFAULT_HANDOFF_RULES) {
+      // Khối não (4 AI + luật + hàng rào) tự dựng theo trang — trigger dung_khoi_nao (migration 048).
       await client.query(
-        `INSERT INTO handoff_rules (user_id, rule_key, enabled, config)
-         VALUES ($1, $2, $3, $4)`,
-        [userId, rule.key, rule.enabled, JSON.stringify(rule.config ?? {})]
+        `INSERT INTO trang (user_id, profile_ref, ten) VALUES ($1, $2, $3)`,
+        [userId, `cho-cap-${userId}`, "Trang đầu tiên"]
       );
     }
 

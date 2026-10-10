@@ -204,9 +204,10 @@ export async function handleCommentReceived(event: CommentEvent): Promise<void> 
 
   const account = await queryOne<{
     user_id: number;
+    trang_id: number | null;
     platform: string;
     raw: Record<string, unknown>;
-  }>("SELECT user_id, platform, raw FROM social_accounts WHERE id = $1", [accountId]);
+  }>("SELECT user_id, trang_id, platform, raw FROM social_accounts WHERE id = $1", [accountId]);
 
   if (!account) {
     console.warn(`[bình luận] Bỏ qua bình luận của tài khoản chưa biết ${accountId}`);
@@ -288,10 +289,10 @@ export async function handleCommentReceived(event: CommentEvent): Promise<void> 
             public_reply_delay_seconds, message_variations, public_reply_variations,
             social_account_id, send_dm
        FROM auto_scripts
-      WHERE user_id = $1 AND is_active = TRUE
+      WHERE trang_id = $1 AND is_active = TRUE
         AND (social_account_id IS NULL OR social_account_id = $2)
       ORDER BY (social_account_id = $2) DESC, created_at`,
-    [account.user_id, accountId]
+    [account.trang_id, accountId]
   );
 
   if (scripts.rows.length === 0) {
@@ -437,7 +438,7 @@ export async function handleCommentReceived(event: CommentEvent): Promise<void> 
    * Hết suất thì để nguyên mốc đã hẹn: lượt quét sau sẽ làm tiếp, không mất việc.
    */
   if (dmDecision.allowed && dmDelayMs === 0) {
-    const phepNgay = await xinPhepGuiBinhLuan(account.user_id, accountId);
+    const phepNgay = await xinPhepGuiBinhLuan(account.user_id, account.trang_id, accountId);
     if (!phepNgay.duoc) {
       console.log(`[bình luận] Hoãn tin riêng sang lượt sau: ${phepNgay.lyDo}`);
       await query(
@@ -459,7 +460,7 @@ export async function handleCommentReceived(event: CommentEvent): Promise<void> 
   }
 
   if (replyText.trim() && replyDelayMs === 0) {
-    const phepCKNgay = await xinPhepGuiBinhLuan(account.user_id, accountId);
+    const phepCKNgay = await xinPhepGuiBinhLuan(account.user_id, account.trang_id, accountId);
     if (!phepCKNgay.duoc) {
       console.log(`[bình luận] Hoãn trả lời công khai sang lượt sau: ${phepCKNgay.lyDo}`);
       await query(
@@ -540,19 +541,20 @@ async function decidePrivateReply(params: {
     };
   }
 
-  // Khoảng nghỉ theo người — nghiêm hơn chính sách, do chủ shop tự bật.
-  const cooldown = await queryOne<{ author_dm_cooldown_hours: number }>(
-    "SELECT author_dm_cooldown_hours FROM guardrail_configs WHERE user_id = $1",
-    [params.userId]
+  // Khoảng nghỉ theo người — nghiêm hơn chính sách, do chủ shop tự bật. Tính trong KHỐI NÃO của bình luận.
+  const cooldown = await queryOne<{ author_dm_cooldown_hours: number; trang_id: number }>(
+    `SELECT g.author_dm_cooldown_hours, c.trang_id
+       FROM comments c JOIN guardrail_configs g ON g.trang_id = c.trang_id WHERE c.id = $1`,
+    [params.commentId]
   );
   const cooldownHours = Number(cooldown?.author_dm_cooldown_hours ?? 0);
 
   if (cooldownHours > 0) {
     const recent = await queryOne(
       `SELECT id FROM comments
-        WHERE user_id = $1 AND author_id = $2 AND private_replied_at IS NOT NULL
+        WHERE trang_id = $1 AND author_id = $2 AND private_replied_at IS NOT NULL
           AND private_replied_at > now() - ($3 || ' hours')::interval`,
-      [params.userId, params.authorId, String(cooldownHours)]
+      [cooldown?.trang_id, params.authorId, String(cooldownHours)]
     );
     if (recent) {
       return {
@@ -601,7 +603,9 @@ export async function sendPrivateReply(params: {
    * Chủ shop có thể xoá câu khai báo khỏi mẫu lúc nào không hay, nên hệ thống
    * tự chèn lại khi thiếu thay vì tin vào lời nhắc trên giao diện.
    */
-  const config = await loadConfig(params.userId);
+  const config = await loadConfig(
+    (await queryOne<{ trang_id: number | null }>("SELECT trang_id FROM social_accounts WHERE id = $1", [params.accountId]))?.trang_id ?? null
+  );
   const canKhaiBao = config.disclosure_enabled && !daTuKhaiBao(params.text);
   const noiDung = canKhaiBao
     ? `${config.disclosure_text}\n\n${params.text}`
@@ -705,6 +709,7 @@ export async function runDueCommentActions(): Promise<number> {
   const dueDms = await query<{
     id: string;
     user_id: number;
+    trang_id: number | null;
     social_account_id: string | null;
     platform_post_id: string;
     author_id: string;
@@ -714,7 +719,7 @@ export async function runDueCommentActions(): Promise<number> {
     pending_dm_text: string;
     platform_created_at: Date | null;
   }>(
-    `SELECT id, user_id, social_account_id, platform_post_id, author_id, author_name,
+    `SELECT id, user_id, trang_id, social_account_id, platform_post_id, author_id, author_name,
             content, matched_script_id, pending_dm_text, platform_created_at
        FROM comments
       WHERE dm_due_at IS NOT NULL AND dm_due_at <= now()
@@ -750,7 +755,7 @@ export async function runDueCommentActions(): Promise<number> {
      * Hết suất thì DỪNG cả lượt quét, không phải bỏ qua dòng này: các dòng sau
      * cũng sẽ hết suất y hệt, và việc còn tới hạn nên lượt quét sau làm tiếp.
      */
-    const phep = await xinPhepGuiBinhLuan(row.user_id, row.social_account_id);
+    const phep = await xinPhepGuiBinhLuan(row.user_id, row.trang_id, row.social_account_id);
     if (!phep.duoc) {
       console.log(`[bình luận] Tạm dừng gửi tin riêng: ${phep.lyDo}`);
       break;
@@ -777,6 +782,7 @@ export async function runDueCommentActions(): Promise<number> {
    */
   const dueReplies = await query<{
     user_id: number;
+    trang_id: number | null;
     id: string;
     social_account_id: string | null;
     platform_post_id: string;
@@ -784,7 +790,7 @@ export async function runDueCommentActions(): Promise<number> {
     is_reply: boolean;
     pending_reply_text: string;
   }>(
-    `SELECT user_id, id, social_account_id, platform_post_id, parent_comment_id, is_reply,
+    `SELECT user_id, trang_id, id, social_account_id, platform_post_id, parent_comment_id, is_reply,
             pending_reply_text
        FROM comments
       WHERE public_reply_due_at IS NOT NULL AND public_reply_due_at <= now()
@@ -797,7 +803,7 @@ export async function runDueCommentActions(): Promise<number> {
   for (const row of dueReplies.rows) {
     if (!row.social_account_id) continue;
 
-    const phepCK = await xinPhepGuiBinhLuan(row.user_id, row.social_account_id);
+    const phepCK = await xinPhepGuiBinhLuan(row.user_id, row.trang_id, row.social_account_id);
     if (!phepCK.duoc) {
       console.log(`[bình luận] Tạm dừng trả lời công khai: ${phepCK.lyDo}`);
       break;

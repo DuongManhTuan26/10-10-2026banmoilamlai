@@ -13,12 +13,22 @@ import {
 } from "../services/guardrails.js";
 import { DAU_THANG_VN } from "../moc-thoi-gian.js";
 
+import { naoCua } from "../khoi-nao.js";
 export const settingsRouter = Router();
 
 // Mọi :id ở đây là mã số — chữ lạ thì 404, không để database vỡ ra 500.
 settingsRouter.param("id", chiNhanMaSo);
 
 settingsRouter.use(requireAuth);
+
+/**
+ * Người nhận báo cáo Telegram của khối não đang mở = CHỦ tài khoản của trang (docs/khoi-nao.md). Chủ chuỗi chưa mở trang
+ * nào thì là chính mình.
+ */
+function nguoiNhanBaoCao(req: { nao?: { chuId: number }; user?: { id: number } }): number {
+  return req.nao?.chuId ?? req.user!.id;
+}
+
 
 // ---------------------------------------------------------------------------
 // Báo cáo Telegram
@@ -40,14 +50,14 @@ settingsRouter.get(
       `SELECT bot_token, chat_id, enabled, events, verified_at,
               uses_platform_bot, linked_account_name, linked_at
          FROM telegram_configs WHERE user_id = $1`,
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
 
     const logs = await query(
       `SELECT id, kind, content, status, error, created_at
-         FROM telegram_logs WHERE user_id = $1
+         FROM telegram_logs WHERE ${req.nao ? "trang_id" : "user_id"} = $1
          ORDER BY created_at DESC LIMIT 50`,
-      [req.user!.id]
+      [req.nao ? req.nao.trangId : req.user!.id]
     );
 
     res.json({
@@ -81,7 +91,7 @@ settingsRouter.get(
 settingsRouter.post(
   "/telegram/link",
   route(async (req, res) => {
-    res.json({ success: true, data: await createLinkUrl(req.user!.id) });
+    res.json({ success: true, data: await createLinkUrl(nguoiNhanBaoCao(req)) });
   })
 );
 
@@ -95,7 +105,7 @@ settingsRouter.post(
               enabled = FALSE, verified_at = NULL, link_code = NULL,
               updated_at = now()
         WHERE user_id = $1`,
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
     res.json({ success: true, message: "Đã ngắt kết nối Telegram" });
   })
@@ -127,7 +137,7 @@ settingsRouter.put(
        RETURNING chat_id, enabled, events, uses_platform_bot,
                  bot_token <> '' AS has_token`,
       [
-        req.user!.id,
+        nguoiNhanBaoCao(req),
         botToken,
         chatId,
         body.enabled === true,
@@ -149,7 +159,7 @@ settingsRouter.post(
     }>(
       `SELECT bot_token, chat_id, uses_platform_bot
          FROM telegram_configs WHERE user_id = $1`,
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
 
     // Dùng bot chung thì chỉ cần đã bấm Start (có chat_id). Chỉ shop chọn bot
@@ -168,7 +178,7 @@ settingsRouter.post(
     }
 
     const sent = await sendTelegramMessage(
-      req.user!.id,
+      nguoiNhanBaoCao(req),
       [
         "✅ <b>KẾT NỐI THÀNH CÔNG</b>",
         "",
@@ -188,7 +198,7 @@ settingsRouter.post(
 
     await query(
       "UPDATE telegram_configs SET verified_at = now(), enabled = TRUE WHERE user_id = $1",
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
 
     res.json({ success: true, message: "Đã gửi tin nhắn thử tới Telegram" });
@@ -206,8 +216,8 @@ settingsRouter.get(
       `SELECT s.*, a.display_name AS account_name, a.platform
          FROM auto_scripts s
          LEFT JOIN social_accounts a ON a.id = s.social_account_id
-        WHERE s.user_id = $1 ORDER BY s.created_at DESC`,
-      [req.user!.id]
+        WHERE s.trang_id = $1 ORDER BY s.created_at DESC`,
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: rows.rows });
   })
@@ -223,23 +233,24 @@ settingsRouter.get(
 settingsRouter.get(
   "/auto-scripts/stats",
   route(async (req, res) => {
-    const userId = req.user!.id;
+    // Số của KHỐI NÃO đang chọn.
+    const trangId = naoCua(req).trangId;
 
     const scripts = await queryOne<{ active: number; posts: number }>(
       `SELECT
          (SELECT COUNT(*)::int FROM auto_scripts
-           WHERE user_id = $1 AND is_active = TRUE) AS active,
+           WHERE trang_id = $1 AND is_active = TRUE) AS active,
          (SELECT COUNT(DISTINCT platform_post_id)::int FROM comments
-           WHERE user_id = $1 AND matched_script_id IS NOT NULL
+           WHERE trang_id = $1 AND matched_script_id IS NOT NULL
              AND created_at > now() - interval '30 days') AS posts`,
-      [userId]
+      [trangId]
     );
 
     // Đã nhắn tin đầu: chính là số bình luận đã được nhắn riêng trong 30 ngày.
     const sent = await queryOne<{ n: number }>(
       `SELECT COUNT(*)::int AS n FROM comments
-        WHERE user_id = $1 AND private_replied_at > now() - interval '30 days'`,
-      [userId]
+        WHERE trang_id = $1 AND private_replied_at > now() - interval '30 days'`,
+      [trangId]
     );
 
     /*
@@ -250,13 +261,13 @@ settingsRouter.get(
     const replied = await queryOne<{ n: number }>(
       `SELECT COUNT(DISTINCT c.id)::int AS n
          FROM conversations c
-        WHERE c.user_id = $1 AND c.origin = 'comment'
+        WHERE c.trang_id = $1 AND c.origin = 'comment'
           AND c.created_at > now() - interval '30 days'
           AND EXISTS (
             SELECT 1 FROM messages m
              WHERE m.conversation_id = c.id AND m.sender_type = 'customer'
           )`,
-      [userId]
+      [trangId]
     );
 
     const orders = await queryOne<{ current: number; previous: number }>(
@@ -268,8 +279,8 @@ settingsRouter.get(
              AND o.created_at <= now() - interval '30 days')::int AS previous
          FROM orders o
          JOIN conversations c ON c.id = o.conversation_id
-        WHERE o.user_id = $1 AND c.origin = 'comment'`,
-      [userId]
+        WHERE o.trang_id = $1 AND c.origin = 'comment'`,
+      [trangId]
     );
 
     const sentCount = sent?.n ?? 0;
@@ -350,17 +361,23 @@ settingsRouter.post(
       throw new AppError("Phải có ít nhất một từ khoá kích hoạt");
     }
 
+    // Kịch bản thuộc KHỐI NÃO đang chọn; gắn riêng một kênh thì kênh đó phải của đúng trang này.
+    const nao = naoCua(req);
+    const kenhRieng = typeof body.socialAccountId === "string" ? body.socialAccountId : null;
+    if (kenhRieng && !(await queryOne("SELECT 1 FROM social_accounts WHERE id = $1 AND trang_id = $2", [kenhRieng, nao.trangId]))) {
+      throw new AppError("Kênh này không thuộc trang bán hàng đang chọn", 400);
+    }
     const inserted = await queryOne(
       `INSERT INTO auto_scripts
-         (user_id, social_account_id, name, keywords, exclude_keywords, match_type,
+         (user_id, trang_id, social_account_id, name, keywords, exclude_keywords, match_type,
           ignore_typo, message, public_reply_enabled, public_reply_text,
           delay_seconds, public_reply_delay_seconds, message_variations,
           public_reply_variations, apply_to, is_active, send_dm)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       VALUES ($1,$18,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING *`,
       [
-        req.user!.id,
-        typeof body.socialAccountId === "string" ? body.socialAccountId : null,
+        nao.chuId,
+        kenhRieng,
         name,
         keywords,
         Array.isArray(body.excludeKeywords) ? body.excludeKeywords : [],
@@ -376,6 +393,7 @@ settingsRouter.post(
         typeof body.applyTo === "string" ? body.applyTo : "all",
         body.isActive !== false,
         sendDm,
+        nao.trangId,
       ]
     );
 
@@ -388,7 +406,7 @@ settingsRouter.patch(
   route(async (req, res) => {
     const body = req.body ?? {};
     const fields: string[] = [];
-    const params: unknown[] = [req.params.id, req.user!.id];
+    const params: unknown[] = [req.params.id, naoCua(req).trangId];
 
     const assign = (column: string, value: unknown) => {
       params.push(value);
@@ -424,7 +442,7 @@ settingsRouter.patch(
 
     const updated = await queryOne(
       `UPDATE auto_scripts SET ${fields.join(", ")}, updated_at = now()
-        WHERE id = $1 AND user_id = $2 RETURNING *`,
+        WHERE id = $1 AND trang_id = $2 RETURNING *`,
       params
     );
 
@@ -436,9 +454,9 @@ settingsRouter.patch(
 settingsRouter.delete(
   "/auto-scripts/:id",
   route(async (req, res) => {
-    const result = await query("DELETE FROM auto_scripts WHERE id = $1 AND user_id = $2", [
+    const result = await query("DELETE FROM auto_scripts WHERE id = $1 AND trang_id = $2", [
       req.params.id,
-      req.user!.id,
+      naoCua(req).trangId,
     ]);
     if (!result.rowCount) throw new AppError("Không tìm thấy kịch bản", 404);
     res.json({ success: true });
@@ -474,12 +492,12 @@ settingsRouter.get(
            WHERE user_id = $1 AND created_at >= ${DAU_THANG_VN})        AS orders_month,
          (SELECT COUNT(*) FROM posts
            WHERE user_id = $1 AND created_at >= ${DAU_THANG_VN})        AS posts_month`,
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
 
     const user = await queryOne<{ plan: string; created_at: Date }>(
       "SELECT plan, created_at FROM users WHERE id = $1",
-      [req.user!.id]
+      [nguoiNhanBaoCao(req)]
     );
 
     res.json({ success: true, data: { plan: user?.plan ?? "trial", usage } });
@@ -497,25 +515,26 @@ settingsRouter.get(
 settingsRouter.get(
   "/safety",
   route(async (req, res) => {
-    const userId = req.user!.id;
+    // An toàn của KHỐI NÃO đang chọn.
+    const trangId = naoCua(req).trangId;
 
     const row = await queryOne<Record<string, number>>(
       `SELECT
          (SELECT COUNT(*) FROM messages
-           WHERE user_id = $1 AND sender_type IN ('ai','human')
+           WHERE trang_id = $1 AND sender_type IN ('ai','human')
              AND sent_at >= now() - interval '1 hour')                     AS sent_last_hour,
          (SELECT COUNT(*) FROM messages
-           WHERE user_id = $1 AND sender_type IN ('ai','human')
+           WHERE trang_id = $1 AND sender_type IN ('ai','human')
              AND sent_at >= now() - interval '30 days')                    AS sent_30d,
          (SELECT COUNT(*) FROM webhook_events
            WHERE event_type = 'message.failed'
-             AND account_id IN (SELECT id FROM social_accounts WHERE user_id = $1)
+             AND account_id IN (SELECT id FROM social_accounts WHERE trang_id = $1)
              AND received_at >= now() - interval '30 days')                AS failed_30d,
          (SELECT COUNT(*) FROM conversations
-           WHERE user_id = $1 AND handoff_at >= now() - interval '30 days') AS handoffs_30d,
+           WHERE trang_id = $1 AND handoff_at >= now() - interval '30 days') AS handoffs_30d,
          (SELECT COUNT(*) FROM conversations
-           WHERE user_id = $1 AND created_at >= now() - interval '30 days') AS conversations_30d`,
-      [userId]
+           WHERE trang_id = $1 AND created_at >= now() - interval '30 days') AS conversations_30d`,
+      [trangId]
     );
 
     // Thời gian AI trả lời trung bình: khoảng cách giữa tin của khách và tin
@@ -527,12 +546,12 @@ settingsRouter.get(
                 m.sender_type,
                 LEAD(m.sender_type) OVER (PARTITION BY m.conversation_id ORDER BY m.created_at) AS next_type
            FROM messages m
-          WHERE m.user_id = $1 AND m.sent_at >= now() - interval '30 days'
+          WHERE m.trang_id = $1 AND m.sent_at >= now() - interval '30 days'
        )
        SELECT AVG(EXTRACT(EPOCH FROM (next_at - customer_at)))::numeric AS avg_seconds
          FROM pairs
         WHERE sender_type = 'customer' AND next_type = 'ai'`,
-      [userId]
+      [trangId]
     );
 
     const sentLastHour = Number(row?.sent_last_hour ?? 0);
@@ -583,8 +602,8 @@ settingsRouter.get(
   route(async (req, res) => {
     const adAccounts = await query<{ id: string; display_name: string; profile_ref: string }>(
       `SELECT id, display_name, profile_ref FROM social_accounts
-        WHERE user_id = $1 AND platform = 'metaads' AND connected = TRUE`,
-      [req.user!.id]
+        WHERE trang_id = $1 AND platform = 'metaads' AND connected = TRUE`,
+      [naoCua(req).trangId]
     );
 
     if (adAccounts.rows.length === 0) {
@@ -625,7 +644,7 @@ settingsRouter.get(
 settingsRouter.get(
   "/guardrails",
   route(async (req, res) => {
-    const status = await guardrailStatus(req.user!.id);
+    const status = await guardrailStatus(naoCua(req).trangId);
     res.json({ success: true, data: status });
   })
 );
@@ -641,7 +660,8 @@ settingsRouter.put(
   route(async (req, res) => {
     const body = req.body ?? {};
     // Trần theo hạn mức THẬT của Zernio, không phải con số tự đặt.
-    const policy = await effectiveRateLimit(req.user!.id);
+    const nao = naoCua(req);
+    const policy = await effectiveRateLimit(nao.trangId);
     const clamped = clampConfig({
       max_sends_per_minute: body.maxSendsPerMinute,
       max_ai_sends_per_hour: body.maxAiSendsPerHour,
@@ -652,13 +672,13 @@ settingsRouter.put(
 
     const updated = await queryOne(
       `INSERT INTO guardrail_configs
-         (user_id, disclosure_enabled, disclosure_text, max_sends_per_minute,
+         (user_id, trang_id, disclosure_enabled, disclosure_text, max_sends_per_minute,
           max_ai_sends_per_hour, auto_pause_enabled, failure_rate_threshold,
           failure_min_samples, auto_pause_minutes)
-       VALUES ($1,$2,$3,
+       VALUES ($1,$10,$2,$3,
                COALESCE($4, 60), COALESCE($5, 0), $6,
                COALESCE($7, 30), COALESCE($8, 10), COALESCE($9, 60))
-       ON CONFLICT (user_id) DO UPDATE SET
+       ON CONFLICT (trang_id) DO UPDATE SET
          disclosure_enabled     = EXCLUDED.disclosure_enabled,
          disclosure_text        = EXCLUDED.disclosure_text,
          max_sends_per_minute   = COALESCE($4, guardrail_configs.max_sends_per_minute),
@@ -670,7 +690,7 @@ settingsRouter.put(
          updated_at             = now()
        RETURNING *`,
       [
-        req.user!.id,
+        nao.chuId,
         body.disclosureEnabled !== false,
         typeof body.disclosureText === "string" && body.disclosureText.trim()
           ? body.disclosureText.trim()
@@ -681,6 +701,7 @@ settingsRouter.put(
         clamped.failure_rate_threshold ?? null,
         clamped.failure_min_samples ?? null,
         clamped.auto_pause_minutes ?? null,
+        nao.trangId,
       ]
     );
 
@@ -692,7 +713,7 @@ settingsRouter.put(
 settingsRouter.post(
   "/guardrails/resume/:accountId",
   route(async (req, res) => {
-    const ok = await resumeAi(req.params.accountId, req.user!.id);
+    const ok = await resumeAi(req.params.accountId, naoCua(req).trangId);
     if (!ok) throw new AppError("Không tìm thấy kênh này", 404);
     res.json({ success: true, message: "Đã mở lại AI cho kênh này" });
   })
@@ -708,9 +729,9 @@ settingsRouter.get(
          FROM send_attempts s
          LEFT JOIN conversations cv ON cv.id = s.conversation_id
          LEFT JOIN customers c ON c.id = cv.customer_id
-        WHERE s.user_id = $1 AND s.decision = 'blocked'
+        WHERE s.trang_id = $1 AND s.decision = 'blocked'
         ORDER BY s.created_at DESC LIMIT 100`,
-      [req.user!.id]
+      [naoCua(req).trangId]
     );
     res.json({ success: true, data: rows.rows });
   })
