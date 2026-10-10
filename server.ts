@@ -1,3 +1,4 @@
+import { caiChanCheDoThu, laCheDoThu } from "./server/che-do-thu.js";
 import { createApp, logStartupWarnings } from "./server/app.js";
 import { env } from "./server/env.js";
 import { verifyConnection, closePool } from "./server/db.js";
@@ -41,6 +42,7 @@ function installCrashGuards(): void {
 }
 
 async function main() {
+  caiChanCheDoThu();
   installCrashGuards();
   logStartupWarnings();
 
@@ -74,6 +76,8 @@ async function main() {
    * quét bù vẫn kéo tin về, còn máy chủ không lên thì hỏng tất.
    */
   void (async () => {
+    // Bản thử không được giành webhook / đường hầm của bản thật (che-do-thu.ts).
+    if (laCheDoThu) return;
     try {
       if (laDiaChiNoiBo(env.appUrl)) {
         /*
@@ -107,11 +111,12 @@ async function main() {
     }
   })();
 
-  startWorker();
+  // Bản thử: không tự đăng bài, không tự trả lời khách, không nhận lệnh Telegram.
+  if (!laCheDoThu) startWorker();
 
   // Vòng lặp nhận lệnh /start của Telegram. Chạy song song, không chờ: đây là
   // vòng lặp vô hạn và không phải điều kiện để server phục vụ request.
-  void startTelegramPolling().catch((error) =>
+  if (!laCheDoThu) void startTelegramPolling().catch((error) =>
     console.error("[telegram] Vòng lặp liên kết dừng bất thường:", error)
   );
 

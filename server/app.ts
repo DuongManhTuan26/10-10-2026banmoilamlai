@@ -19,8 +19,8 @@ import { analyticsRouter } from "./routes/analytics.js";
 import { hoanDiaChiKho, laDiaChiKho } from "./services/media-proxy.js";
 import { adminRouter } from "./routes/admin.js";
 import { quanLyRouter } from "./routes/quan-ly.js";
-import { chayVoiCachTim } from "./services/ngu-canh-trang.js";
-import { layTrangDangChon } from "./services/trang.js";
+import { chayChoTrang } from "./services/ngu-canh-trang.js";
+import { ganKhoiNao } from "./khoi-nao.js";
 
 export async function createApp() {
   const app = express();
@@ -83,18 +83,13 @@ export async function createApp() {
   app.use(attachUser);
 
   /*
-   * Trang đang làm việc của mỗi yêu cầu — để tiền AI ghi đúng trang (xem ngu-canh-trang.ts). Giao diện gửi kênh đang
-   * chọn qua đầu X-Kenh (hoặc accountId); máy chủ KHÔNG tin số trang từ ngoài mà suy từ kênh và kiểm kênh thuộc
-   * đúng người đăng nhập (layTrangDangChon). Không gửi thì là Trang đầu tiên của tài khoản.
+   * KHỐI NÃO của mỗi yêu cầu (docs/khoi-nao.md): một chỗ duy nhất xác định trang — server/khoi-nao.ts. Tiền AI phát
+   * sinh trong yêu cầu ghi đúng trang đó (ngu-canh-trang.ts).
    */
+  app.use("/api", ganKhoiNao);
   app.use("/api", (req, _res, next) => {
-    if (!req.user) return next();
-    const userId = req.user.id;
-    const kenh =
-      req.get("x-kenh") ||
-      (typeof req.query.accountId === "string" ? req.query.accountId : undefined) ||
-      (typeof req.body?.accountId === "string" ? (req.body.accountId as string) : undefined);
-    chayVoiCachTim(() => layTrangDangChon(userId, kenh ?? null), next);
+    const trangId = req.nao?.trangId ?? null;
+    chayChoTrang(trangId, next);
   });
 
   app.get("/api/health", (_req, res) => {
@@ -197,7 +192,11 @@ export async function createApp() {
   } else {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      /*
+       * Cổng làm mới giao diện (HMR) đặt được qua HMR_PORT — hai bản chạy cùng máy mà dùng chung cổng mặc định 24678 thì
+       * bản sau không mở được, và trình duyệt của bản này có thể nghe nhầm thay đổi của bản kia.
+       */
+      server: { middlewareMode: true, ...(process.env.HMR_PORT ? { hmr: { port: Number(process.env.HMR_PORT) } } : {}) },
       appType: "spa",
     });
     app.use(vite.middlewares);
