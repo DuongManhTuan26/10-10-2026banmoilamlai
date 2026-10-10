@@ -34,7 +34,7 @@ import {
   type HuongKichBan,
   type LuaChonVideo,
 } from "./video-ai.js";
-import { sendTelegramMessage, escapeHtml } from "./telegram.js";
+import { sendTelegramMessage, escapeHtml, suKienBat } from "./telegram.js";
 import { gioiHanChatNhat } from "../../src/lib/gioi-han-kenh.js";
 import { chayChoTrang } from "./ngu-canh-trang.js";
 
@@ -518,7 +518,8 @@ async function lamMotO(
     ]);
     await baoTelegram(
       userId,
-      `🤖 <b>AI vừa đăng một bài</b>\nChủ đề: ${escapeHtml(chuDe)}\n\n${escapeHtml(noiDung.slice(0, 600))}`
+      `🤖 <b>AI vừa đăng một bài</b>\nChủ đề: ${escapeHtml(chuDe)}\n\n${escapeHtml(noiDung.slice(0, 600))}`,
+      true
     );
     return true;
   }
@@ -549,9 +550,16 @@ async function lamMotO(
   return true;
 }
 
-/** Báo Telegram là việc phụ: chưa cấu hình hoặc lỗi thì vẫn phải chạy tiếp. */
-async function baoTelegram(userId: number, text: string): Promise<void> {
+/**
+ * Báo Telegram là việc phụ: chưa cấu hình hoặc lỗi thì vẫn phải chạy tiếp.
+ *
+ * `daDang`: tin chỉ BÁO bài đã đăng xong (không cần chủ shop làm gì) → theo công tắc "Bài đăng đã lên sóng"
+ * (`post_published`, mặc định tắt — khớp TelegramAlerts.tsx). Tin cần chủ shop làm gì (chờ duyệt, sắp tự đăng, lỗi)
+ * thì luôn gửi.
+ */
+async function baoTelegram(userId: number, text: string, daDang = false): Promise<void> {
   try {
+    if (daDang && !(await suKienBat(userId, "post_published", false))) return;
     await sendTelegramMessage(userId, text, "content");
   } catch {
     /* im lặng có chủ đích: không để tin nhắn hỏng làm hỏng việc đăng bài */
@@ -796,7 +804,8 @@ export async function runDueVideoTuDong(): Promise<number> {
     }
     await baoTelegram(
       b.user_id,
-      `🤖 <b>${guard === "publish" ? "AI vừa đăng một bài" : guard === "notify" ? `Bài sẽ tự đăng sau ${cau.notifyMinutes} phút` : "Bài mới đang chờ bạn duyệt"}</b>\n${escapeHtml(ghiChu)}\n\n${escapeHtml(b.content.slice(0, 400))}`
+      `🤖 <b>${guard === "publish" ? "AI vừa đăng một bài" : guard === "notify" ? `Bài sẽ tự đăng sau ${cau.notifyMinutes} phút` : "Bài mới đang chờ bạn duyệt"}</b>\n${escapeHtml(ghiChu)}\n\n${escapeHtml(b.content.slice(0, 400))}`,
+      guard === "publish"
     );
     dem += 1;
   }

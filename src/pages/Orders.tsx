@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, formatCurrency, type Order } from '../lib/api';
 import BangLoi from '../components/BangLoi';
+import { hoiNhap, hoiXacNhan } from '../components/HopHoi';
 
 const FILTERS = ['Tất cả', 'Chờ xác nhận', 'Đã xác nhận', 'Đang giao', 'Hoàn thành', 'Đã hủy'];
 
@@ -40,7 +41,36 @@ interface DisplayOrder {
   note: string | null;
   telegramSent: boolean;
   conversationId: string | null;
+  /** Đơn 0đ = AI không xác nhận được giá từ tài liệu shop. */
+  chuaCoGia: boolean;
+  /** Các dòng hàng: đơn nhiều sản phẩm lấy từ `items`, đơn cũ / một sản phẩm thì một dòng. */
+  items: { name: string; qty: number; price: string; total: string }[];
+  /** Mốc thật của đơn (tạo, báo Telegram, sửa gần nhất) theo thứ tự thời gian. */
+  timeline: { text: string; time: string }[];
 }
+
+/** Khoảng ngày của ô chọn — giá trị gửi lên máy chủ (`soNgay`), '' = mọi đơn. */
+const KHOANG_NGAY = [
+  { giaTri: '', ten: 'Mọi thời gian' },
+  { giaTri: '1', ten: 'Hôm nay' },
+  { giaTri: '7', ten: '7 ngày qua' },
+  { giaTri: '30', ten: '30 ngày qua' },
+];
+
+/** Nguồn của lần chạm cuối trước khi chốt (orders.origin) — tên hiển thị. */
+const TEN_NGUON: Record<string, string> = {
+  quang_cao: 'khách đến từ quảng cáo',
+  lien_ket: 'khách đến từ liên kết',
+  binh_luan: 'khách đến từ bình luận',
+  tu_nhan: 'khách tự nhắn',
+};
+
+/** Máy chủ trả về tối đa chừng này đơn mỗi lần (server/routes/orders.ts). */
+const TOI_DA_MOT_LAN = 200;
+
+const gioNgay = (iso: string) => new Date(iso).toLocaleString('vi-VN', {
+  hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
+});
 
 /**
  * `trongKhuon`: trang đang nằm trong khuôn khối não (KhuonAi) — đầu khuôn đã có tên AI, trang khối não và thẻ
@@ -64,11 +94,14 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [soNgay, setSoNgay] = useState('');
+  /** Đơn đang mở danh sách "Đổi trạng thái" trong menu ⋯. */
+  const [doiTrangThaiId, setDoiTrangThaiId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, summary: s } = await api.orders.list();
+      const { data, summary: s } = await api.orders.list({ soNgay });
       setOrders(data);
       setSummary(s);
     } catch (error) {
@@ -76,7 +109,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [soNgay]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -119,7 +152,32 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         address: order.address || 'Chưa có địa chỉ',
         note: order.note,
         telegramSent: Boolean(order.telegram_sent_at),
-        conversationId: (order as any).conversation_id ?? null,
+        conversationId: order.conversation_id ?? null,
+        items: order.items?.length
+          ? order.items.map((x) => ({
+              name: x.ten, qty: x.so_luong,
+              price: x.don_gia ? formatCurrency(x.don_gia) : '—',
+              total: x.don_gia ? formatCurrency(x.so_luong * x.don_gia) : '—',
+            }))
+          : [{
+              name: order.product, qty: order.quantity,
+              price: Number(order.unit_price) ? formatCurrency(order.unit_price) : '—',
+              total: Number(order.total) ? formatCurrency(order.total) : '—',
+            }],
+        timeline: [
+          {
+            luc: order.created_at,
+            text: `Lên đơn — ${order.closed_by === 'ai' ? 'AI chốt' : 'nhân viên chốt'}`
+              + (order.origin && TEN_NGUON[order.origin] ? ` (${TEN_NGUON[order.origin]})` : ''),
+          },
+          ...(order.telegram_sent_at ? [{ luc: order.telegram_sent_at, text: 'Đã báo đơn qua Telegram' }] : []),
+          // Sửa sau lúc tạo hơn 1 phút mới tính là một lần cập nhật (lúc tạo, updated_at = created_at).
+          ...(order.updated_at && new Date(order.updated_at).getTime() - created.getTime() > 60_000
+            ? [{ luc: order.updated_at, text: `Cập nhật gần nhất — trạng thái hiện tại: ${STATUS_TO_LABEL[order.status]}` }]
+            : []),
+        ]
+          .sort((a, b) => new Date(a.luc).getTime() - new Date(b.luc).getTime())
+          .map((e) => ({ text: e.text, time: gioNgay(e.luc) })),
       };
     }),
     [orders]
@@ -185,6 +243,59 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
     } finally {
       setBusyId(null);
     }
+  };
+
+  /** Mở đúng hội thoại đã lên đơn này trong Hộp thư của AI bán hàng (Inbox đọc ?hoi-thoai=). */
+  const moDoanChat = (order: DisplayOrder) => {
+    setOpenDropdownId(null);
+    if (!order.conversationId) {
+      setErrorMessage('Đơn này được nhập tay, không đi kèm đoạn chat nào.');
+      return;
+    }
+    navigate(`/ban-hang?the=dang-lam&viec=hop-thu&hoi-thoai=${encodeURIComponent(order.conversationId)}`);
+  };
+
+  /**
+   * Điền đơn giá cho đơn 0đ (AI không xác nhận được giá, hoặc nhập tay quên giá). Chỉ đơn MỘT sản phẩm: máy chủ tính
+   * lại tổng = số lượng × đơn giá; đơn nhiều dòng hàng (`items`) không sửa theo cách này được.
+   */
+  const dienGia = async (order: DisplayOrder) => {
+    const nhap = await hoiNhap({
+      tieuDe: `Điền giá cho đơn ${order.id}`,
+      noiDung: `${order.productName} — số lượng ${order.quantity}. Tổng tiền = số lượng × đơn giá.`,
+      nhan: 'Đơn giá (đồng)',
+      goiY: 'vd. 150000',
+      nutDongY: 'Lưu giá',
+      bieuTuong: 'payments',
+      kiemTra: (v) => {
+        const n = Number(v.replace(/[.\s,đ]/g, ''));
+        return Number.isFinite(n) && n > 0 ? null : 'Nhập một số tiền lớn hơn 0';
+      },
+    });
+    if (nhap === null) return;
+    setBusyId(order.raw.id);
+    setErrorMessage('');
+    try {
+      await api.orders.update(order.raw.id, { unitPrice: Number(nhap.replace(/[.\s,đ]/g, '')) });
+      await load();
+      setSelectedOrder(null);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : 'Không lưu được giá');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const huyDon = async (order: DisplayOrder) => {
+    setOpenDropdownId(null);
+    if (!(await hoiXacNhan({
+      tieuDe: `Huỷ đơn ${order.id}?`,
+      noiDung: 'Đơn chuyển sang "Đã hủy" và không còn tính vào doanh thu. Muốn khôi phục thì đổi lại trạng thái.',
+      nutDongY: 'Huỷ đơn',
+      nutHuy: 'Giữ đơn',
+      nguyHiem: true,
+    }))) return;
+    await handleChangeStatus(order, 'Đã hủy');
   };
 
   /**
@@ -278,11 +389,17 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
           <p className="text-on-surface-variant text-sm">Tất cả đơn hàng AI chốt được và bạn chốt tay</p>
         </div>
         
-        <div className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-3 py-2 cursor-pointer hover:bg-surface-container transition-colors">
+        <label className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-lg px-3 py-2 cursor-pointer hover:border-outline transition-colors">
           <span className="material-symbols-outlined text-[18px] text-on-surface-variant">calendar_today</span>
-          <span className="text-sm font-medium text-on-surface">30 ngày qua</span>
-          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">arrow_drop_down</span>
-        </div>
+          <select
+            value={soNgay}
+            onChange={(e) => setSoNgay(e.target.value)}
+            className="bg-transparent text-sm font-medium text-on-surface focus:outline-none cursor-pointer"
+            aria-label="Khoảng ngày của danh sách đơn"
+          >
+            {KHOANG_NGAY.map((k) => <option key={k.giaTri} value={k.giaTri} className="bg-noi">{k.ten}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* Stats Cards */}
@@ -446,7 +563,9 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
                     <td className="py-4 px-5 text-right">
                       {order.chuaCoGia ? (
                         <span
-                          title="AI không xác nhận được giá từ tài liệu của bạn. Bấm vào đơn để điền giá đúng."
+                          title={order.raw.closed_by === 'ai'
+                            ? 'AI không xác nhận được giá từ tài liệu của bạn — cần điền giá đúng.'
+                            : 'Đơn nhập tay chưa điền đơn giá.'}
                           className="inline-flex items-center gap-1 text-sm font-bold text-orange-400 whitespace-nowrap"
                         >
                           <span className="material-symbols-outlined text-[16px]">error</span>
@@ -476,6 +595,7 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenDropdownId(openDropdownId === order.id ? null : order.id);
+                          setDoiTrangThaiId(null);
                         }}
                       >
                         <span className="material-symbols-outlined text-[20px]">more_vert</span>
@@ -494,31 +614,50 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
                             <span className="material-symbols-outlined text-[18px]">visibility</span> Xem chi tiết
                           </button>
                           <button 
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors w-full text-left"
-                            onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors w-full text-left disabled:opacity-40 disabled:hover:bg-transparent"
+                            onClick={(e) => { e.stopPropagation(); moDoanChat(order); }}
+                            disabled={!order.conversationId}
+                            title={order.conversationId ? undefined : 'Đơn nhập tay, không có đoạn chat'}
                           >
                             <span className="material-symbols-outlined text-[18px]">forum</span> Mở đoạn chat
                           </button>
                           <button 
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors w-full text-left"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors w-full text-left disabled:opacity-40 disabled:hover:bg-transparent"
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenDropdownId(null);
                               if (order.phone) window.location.href = `tel:${order.phone.replace(/\s/g, '')}`;
                             }}
+                            disabled={!order.phone}
+                            title={order.phone ? undefined : 'Đơn chưa có số điện thoại'}
                           >
                             <span className="material-symbols-outlined text-[18px]">call</span> Gọi cho khách
                           </button>
                           <button 
                             className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-variant transition-colors w-full text-left"
-                            onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }}
+                            onClick={(e) => { e.stopPropagation(); setDoiTrangThaiId(doiTrangThaiId === order.id ? null : order.id); }}
+                            aria-expanded={doiTrangThaiId === order.id}
                           >
                             <span className="material-symbols-outlined text-[18px]">change_circle</span> Đổi trạng thái
+                            <span className="material-symbols-outlined text-[18px] ml-auto">{doiTrangThaiId === order.id ? 'expand_less' : 'expand_more'}</span>
                           </button>
+                          {doiTrangThaiId === order.id && FILTERS
+                            .filter((f) => f !== 'Tất cả' && f !== 'Đã hủy' && f !== order.status)
+                            .map((label) => (
+                              <button
+                                key={label}
+                                className="flex items-center gap-2 pl-11 pr-4 py-2 text-sm text-on-surface hover:bg-surface-variant transition-colors w-full text-left disabled:opacity-50"
+                                disabled={busyId === order.raw.id}
+                                onClick={(e) => { e.stopPropagation(); handleChangeStatus(order, label); }}
+                              >
+                                <span className={clsx('w-2 h-2 rounded-full shrink-0', getStatusColor(label))}></span> {label}
+                              </button>
+                            ))}
                           <div className="h-[1px] bg-outline-variant/50 my-1"></div>
                           <button 
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-error hover:bg-error/10 transition-colors w-full text-left"
-                            onClick={(e) => { e.stopPropagation(); setOpenDropdownId(null); }}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-error hover:bg-error/10 transition-colors w-full text-left disabled:opacity-40 disabled:hover:bg-transparent"
+                            onClick={(e) => { e.stopPropagation(); huyDon(order); }}
+                            disabled={order.status === 'Đã hủy' || busyId === order.raw.id}
                           >
                             <span className="material-symbols-outlined text-[18px] text-error">block</span> Hủy đơn
                           </button>
@@ -541,9 +680,14 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
         {/* Pagination */}
         <div className="border-t border-outline-variant px-5 py-4 flex items-center justify-between bg-surface-container">
           <span className="text-sm text-on-surface-variant font-medium">
-            {filteredOrders.length === 0
-              ? 'Chưa có đơn hàng nào'
-              : `Hiển thị ${filteredOrders.length} trên tổng ${summary.total} đơn hàng`}
+            {loading
+              ? 'Đang tải đơn…'
+              : filteredOrders.length === 0
+                ? (orders.length === 0 && !soNgay ? 'Chưa có đơn hàng nào' : 'Không có đơn nào khớp bộ lọc')
+                : soNgay
+                  ? `Hiển thị ${filteredOrders.length} đơn — ${KHOANG_NGAY.find((k) => k.giaTri === soNgay)?.ten.toLowerCase()}`
+                  : `Hiển thị ${filteredOrders.length} trên tổng ${summary.total} đơn hàng`}
+            {orders.length >= TOI_DA_MOT_LAN && ` · chỉ nạp ${TOI_DA_MOT_LAN} đơn mới nhất, dùng ô tìm hoặc khoảng ngày để xem đơn cũ hơn`}
           </span>
         </div>
       </div>
@@ -576,10 +720,10 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
               ))}
               <button
                 type="button"
-                onClick={() => selectedOrder.conversationId
-                  ? navigate('/inbox')
-                  : setErrorMessage('Đơn này không được tạo từ hội thoại nào.')}
-                className={clsx(NUT_PHU, 'ml-auto')}
+                onClick={() => moDoanChat(selectedOrder)}
+                disabled={!selectedOrder.conversationId}
+                title={selectedOrder.conversationId ? undefined : 'Đơn nhập tay, không có đoạn chat'}
+                className={clsx(NUT_PHU, 'ml-auto disabled:opacity-40')}
               >
                 <span className="material-symbols-outlined text-[20px]">forum</span>
                 Mở đoạn chat gốc
@@ -648,9 +792,24 @@ export default function Orders({ trongKhuon = false }: { trongKhuon?: boolean } 
                   <div className="p-4 border-t border-outline-variant bg-surface-container-high flex justify-between items-center">
                     <span className="text-base font-bold text-on-surface">TỔNG CỘNG</span>
                     {selectedOrder.chuaCoGia ? (
-                      <span className="text-xl font-bold text-orange-400">
-                        Chưa có giá — AI không tìm thấy con số này trong tài liệu của bạn
-                      </span>
+                      <div className="flex flex-col items-end text-right">
+                        <span className="text-xl font-bold text-orange-400">
+                          {selectedOrder.raw.closed_by === 'ai'
+                            ? 'Chưa có giá — AI không tìm thấy con số này trong tài liệu của bạn'
+                            : 'Chưa có giá — đơn nhập tay chưa điền đơn giá'}
+                        </span>
+                        {!selectedOrder.raw.items?.length && (
+                          <button
+                            type="button"
+                            onClick={() => dienGia(selectedOrder)}
+                            disabled={busyId === selectedOrder.raw.id}
+                            className={clsx(NUT_PHU, 'mt-3 disabled:opacity-50')}
+                          >
+                            <span className="material-symbols-outlined text-[20px]">payments</span>
+                            Điền giá
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xl font-bold text-primary">{selectedOrder.value}</span>
                     )}

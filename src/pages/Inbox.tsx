@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { clsx } from 'clsx';
 import {
   api, ApiError, formatCurrency, timeAgo, windowRemaining,
   type Conversation, type ConversationDetail,
 } from '../lib/api';
 import { useActivePage } from '../lib/ActivePage';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import BangLoi from '../components/BangLoi';
 import HopThoai, { NHAN_O, NUT_CHINH, NUT_PHU, O_NHAP } from '../components/HopThoai';
 
@@ -29,7 +29,14 @@ export default function Inbox() {
   const { accounts, activeAccountId, setActiveAccountId } = useActivePage();
 
   const [activeTab, setActiveTab] = useState('Tất cả');
-  const [selectedId, setSelectedId] = useState('');
+  /*
+   * ?hoi-thoai=<id>: nơi khác (vd. "Mở đoạn chat" ở Đơn hàng) mở thẳng một hội thoại. Hội thoại đó có thể không nằm
+   * trong mẻ đang nạp (cũ hơn, khác kênh, khác thẻ lọc) — khung chat nạp theo mã nên vẫn mở được; `ghimHoiThoai` giữ
+   * nó không bị lượt "tự chọn hội thoại đầu tiên" bên dưới thay mất, cho tới khi người dùng tự chọn hội thoại khác.
+   */
+  const [timUrl] = useSearchParams();
+  const ghimHoiThoai = useRef(timUrl.get('hoi-thoai') ?? '');
+  const [selectedId, setSelectedId] = useState(ghimHoiThoai.current);
   /*
    * Trên điện thoại chỉ đủ chỗ cho MỘT trong hai: danh sách hội thoại hoặc
    * khung chat.
@@ -43,7 +50,7 @@ export default function Inbox() {
    * tiên — dựa vào selectedId thì mở hộp thư ra là nhảy thẳng vào một cuộc
    * chat, không bao giờ nhìn thấy danh sách.
    */
-  const [xemChiTietDiDong, setXemChiTietDiDong] = useState(false);
+  const [xemChiTietDiDong, setXemChiTietDiDong] = useState(Boolean(ghimHoiThoai.current));
   const [search, setSearch] = useState('');
   const [showCopyToast, setShowCopyToast] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -119,6 +126,7 @@ export default function Inbox() {
 
   /** Chọn hội thoại đầu tiên khi đổi kênh hoặc đổi tab. */
   useEffect(() => {
+    if (ghimHoiThoai.current && selectedId === ghimHoiThoai.current) return;
     if (conversations.length === 0) { setSelectedId(''); setDetail(null); return; }
     if (!conversations.some((c) => c.id === selectedId)) setSelectedId(conversations[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

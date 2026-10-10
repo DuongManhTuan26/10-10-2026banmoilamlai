@@ -30,6 +30,18 @@ ordersRouter.get(
       conditions.push(`o.status = $${params.length}`);
     }
 
+    /*
+     * Khoảng ngày (ô chọn trên trang Đơn hàng): 1 = hôm nay, 7 / 30 = số ngày gần nhất tính cả hôm nay, theo giờ Việt
+     * Nam. Bỏ trống = mọi đơn. Chỉ nhận đúng 3 giá trị — không ghép chữ người dùng vào câu lệnh.
+     */
+    const SO_NGAY: Record<string, string> = {
+      "1": DAU_NGAY_VN,
+      "7": `${DAU_NGAY_VN} - interval '6 days'`,
+      "30": `${DAU_NGAY_VN} - interval '29 days'`,
+    };
+    const soNgay = typeof req.query.soNgay === "string" ? SO_NGAY[req.query.soNgay] : undefined;
+    if (soNgay) conditions.push(`o.created_at >= ${soNgay}`);
+
     if (typeof search === "string" && search.trim() !== "") {
       params.push(`%${search.trim()}%`);
       const i = params.length;

@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { api, ApiError, timeAgo } from '../lib/api';
+import { api, ApiError, type LichDieuHanh } from '../lib/api';
 import { hoiXacNhan } from '../components/HopHoi';
+import { aiTheoMa } from '../lib/bon-ai';
 
-/** Khoá sự kiện trong database <-> nhãn hiển thị. */
-const EVENT_KEYS = {
-  new_order: 'Đơn hàng mới',
-  handoff: 'Khách cần người hỗ trợ',
-  near_24h: 'Sắp hết 24 giờ',
-  daily_summary: 'Tổng kết ngày',
-  weekly_summary: 'Tổng kết tuần',
-  post_published: 'Bài đã đăng',
-  new_comment: 'Bình luận mới',
-  ads_budget: 'Cảnh báo ngân sách quảng cáo',
-} as const;
+/*
+ * MỖI DÒNG TRÊN TRANG NÀY PHẢI ỨNG VỚI MỘT TIN MÁY CHỦ GỬI THẬT (rà soát lượt 2, L4 — 11/10/2026). Trước đây 6/8 công
+ * tắc không có đường gửi nào phía máy chủ. Nơi gửi từng loại:
+ *   new_order      services/telegram.ts sendOrderReport        — luôn gửi
+ *   handoff        services/telegram.ts sendHandoffAlert       — luôn gửi
+ *   near_24h       services/canh-bao-telegram.ts runDueSapHet24h — công tắc, mặc định BẬT
+ *   kenh_hong      services/canh-bao-telegram.ts runDueKenhHong  — luôn gửi
+ *   post_published services/autopilot.ts baoTelegram(…, daDang) — công tắc, mặc định TẮT
+ *   báo cáo ngày   services/dieu-hanh-ngay.ts — cài ở ④ AI Điều hành (một chỗ cài duy nhất)
+ * Đã gỡ (chủ dự án quyết 11/10/2026, docs/ton-dong.md): tổng kết tuần, bình luận mới, chi tiêu quảng cáo.
+ */
 
 interface LogRow {
   id: number;
@@ -47,7 +49,8 @@ export default function TelegramAlerts() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [events, setEvents] = useState<Record<string, boolean>>({});
-  const [dailySummaryTime, setDailySummaryTime] = useState('20:00');
+  /** Lịch báo cáo ngày của AI điều hành (khối não đang chọn) — chỉ để hiện, cài ở ④ AI Điều hành. */
+  const [lichBaoCao, setLichBaoCao] = useState<LichDieuHanh | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -70,9 +73,8 @@ export default function TelegramAlerts() {
       setVerifiedAt(data.verifiedAt);
       setLogs(data.logs);
       setEvents(data.events ?? {});
-      if (typeof data.events?.dailySummaryTime === 'string') {
-        setDailySummaryTime(data.events.dailySummaryTime as unknown as string);
-      }
+      // Lịch báo cáo ngày thuộc khối não; chưa chọn trang (409) thì thôi, không chặn cả trang Telegram.
+      api.khoiNao.lich().then((r) => setLichBaoCao(r.data.lich)).catch(() => setLichBaoCao(null));
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : 'Không tải được cấu hình Telegram');
     } finally {
@@ -208,17 +210,17 @@ export default function TelegramAlerts() {
     }
   };
 
-  const handleResend = async () => {
-    // Gửi lại là gửi một tin kiểm tra mới; tin cũ đã thất bại không lưu
-    // nguyên văn nội dung động nên không tái tạo được y hệt.
-    await handleSendTest();
-  };
-
-  /** Lịch sử gửi, chuyển sang hình dạng bảng đang vẽ. */
+  /** Lịch sử gửi, chuyển sang hình dạng bảng đang vẽ. Mã loại = tham số `kind` của sendTelegramMessage. */
   const KIND_LABELS: Record<string, string> = {
     new_order: 'Đơn hàng',
     handoff: 'Cần xử lý',
-    daily_summary: 'Tổng kết',
+    sap_het_24h: 'Cần xử lý',
+    kenh_hong: 'Cảnh báo',
+    webhook_dead: 'Cảnh báo',
+    queue_stuck: 'Cảnh báo',
+    chi_phi: 'Cảnh báo',
+    bao_cao_ngay: 'Báo cáo ngày',
+    content: 'Nội dung',
     test: 'Kiểm tra',
     general: 'Thông báo',
   };
@@ -229,24 +231,20 @@ export default function TelegramAlerts() {
       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     }),
     type: KIND_LABELS[log.kind] ?? 'Thông báo',
-    content: log.content,
+    // Sổ lưu nguyên văn tin gửi đi (dạng HTML của Telegram) — bỏ thẻ, trả lại ký tự đã thoát để đọc được.
+    content: log.content
+      .replace(/<[^>]+>/g, '')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'),
     status: log.status === 'sent' ? 'Đã gửi' : 'Gửi lỗi',
     error: log.error,
   }));
 
-  // Trạng thái từng loại thông báo, dùng cho các công tắc trên giao diện
+  // Trạng thái từng loại thông báo, dùng cho các công tắc trên giao diện. Mặc định phải khớp máy chủ (suKienBat).
   const warnNear24h = eventOn('near_24h');
   const setWarnNear24h = (v: boolean) => setEvent('near_24h', v);
-  const dailySummary = eventOn('daily_summary');
-  const setDailySummary = (v: boolean) => setEvent('daily_summary', v);
-  const weeklySummary = events.weekly_summary === true;
-  const setWeeklySummary = (v: boolean) => setEvent('weekly_summary', v);
   const postPublished = events.post_published === true;
   const setPostPublished = (v: boolean) => setEvent('post_published', v);
-  const newComment = events.new_comment === true;
-  const setNewComment = (v: boolean) => setEvent('new_comment', v);
-  const adsBudgetWarn = eventOn('ads_budget');
-  const setAdsBudgetWarn = (v: boolean) => setEvent('ads_budget', v);
+  const dieuHanh = aiTheoMa('analytics');
 
   return (
     <main className="flex-1   p-8 space-y-8  ">
@@ -502,8 +500,8 @@ export default function TelegramAlerts() {
 
             <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50">
               <div>
-                <div className="font-bold text-on-surface mb-1">Mất kết nối Fanpage</div>
-                <div className="text-sm text-on-surface-variant">Token hết hạn, AI ngừng hoạt động</div>
+                <div className="font-bold text-on-surface mb-1">Kênh mất kết nối</div>
+                <div className="text-sm text-on-surface-variant">Fanpage / kênh bị ngắt hoặc cần nối lại — AI ngừng nhận tin của kênh đó</div>
               </div>
               <div className="w-12 h-6 shrink-0 bg-primary rounded-full relative opacity-50 cursor-not-allowed">
                 <div className="w-4 h-4 bg-on-primary rounded-full absolute right-1 top-1 flex items-center justify-center">
@@ -525,59 +523,32 @@ export default function TelegramAlerts() {
           </div>
 
           <div className="space-y-4 flex-1">
-            <div className="flex flex-col p-4 rounded-xl bg-surface-container-low border border-outline-variant/50 hover:border-primary/50 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-bold text-on-surface">Tổng kết cuối ngày</div>
-                <button onClick={() => setDailySummary(!dailySummary)} className={clsx("w-12 h-6 shrink-0 rounded-full relative transition-colors duration-200", dailySummary ? "bg-primary" : "bg-surface-variant")}>
-                  <div className={clsx("w-4 h-4 rounded-full absolute top-1 transition-transform duration-200", dailySummary ? "bg-on-primary translate-x-7" : "bg-on-surface-variant translate-x-1")}></div>
-                </button>
-              </div>
-              <div className="text-sm text-on-surface-variant mb-3">Số đơn, doanh thu, tỷ lệ chốt trong ngày</div>
-              {dailySummary && (
-                <div className="flex items-center gap-3 mt-auto">
-                  <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">LÚC</span>
-                  <input type="time" value={dailySummaryTime} onChange={e => setDailySummaryTime(e.target.value)} className="bg-surface-container-high border border-outline-variant rounded-lg px-2 py-1 text-sm text-on-surface focus:outline-none focus:border-primary" />
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50 hover:border-primary/50 transition-colors">
+            {/* Một chỗ cài duy nhất: báo cáo ngày của ④ AI Điều hành (gộp "Tổng kết cuối ngày" cũ — trùng nội dung). */}
+            <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50">
               <div>
-                <div className="font-bold text-on-surface mb-1">Tổng kết cuối tuần</div>
-                <div className="text-sm text-on-surface-variant">So sánh với tuần trước</div>
+                <div className="font-bold text-on-surface mb-1">Báo cáo ngày của AI Điều hành</div>
+                <div className="text-sm text-on-surface-variant">
+                  {lichBaoCao
+                    ? (lichBaoCao.baoCaoNgay ? `Đang bật — gửi lúc ${lichBaoCao.gio} mỗi ngày` : 'Đang tắt')
+                    : 'Số đơn, doanh thu, hiệu suất 3 AI trong ngày của trang bán hàng'}
+                </div>
               </div>
-              <button onClick={() => setWeeklySummary(!weeklySummary)} className={clsx("w-12 h-6 shrink-0 rounded-full relative transition-colors duration-200", weeklySummary ? "bg-primary" : "bg-surface-variant")}>
-                <div className={clsx("w-4 h-4 rounded-full absolute top-1 transition-transform duration-200", weeklySummary ? "bg-on-primary translate-x-7" : "bg-on-surface-variant translate-x-1")}></div>
-              </button>
+              <Link
+                to={`${dieuHanh.duong}?the=huong-dan`}
+                className="shrink-0 text-sm font-bold hover:underline whitespace-nowrap"
+                style={{ color: dieuHanh.hex }}
+              >
+                Cài ở ④ AI Điều hành →
+              </Link>
             </div>
 
             <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50 hover:border-primary/50 transition-colors">
               <div>
                 <div className="font-bold text-on-surface mb-1">Bài đăng đã lên sóng</div>
-                <div className="text-sm text-on-surface-variant">Báo mỗi khi bài theo lịch được đăng</div>
+                <div className="text-sm text-on-surface-variant">Báo mỗi khi AI tự đăng xong một bài. Bài chờ duyệt / sắp tự đăng thì luôn được báo.</div>
               </div>
               <button onClick={() => setPostPublished(!postPublished)} className={clsx("w-12 h-6 shrink-0 rounded-full relative transition-colors duration-200", postPublished ? "bg-primary" : "bg-surface-variant")}>
                 <div className={clsx("w-4 h-4 rounded-full absolute top-1 transition-transform duration-200", postPublished ? "bg-on-primary translate-x-7" : "bg-on-surface-variant translate-x-1")}></div>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50 hover:border-primary/50 transition-colors">
-              <div>
-                <div className="font-bold text-on-surface mb-1">Có khách mới bình luận</div>
-                <div className="text-sm text-on-surface-variant">Có thể rất nhiều thông báo nếu bài viral</div>
-              </div>
-              <button onClick={() => setNewComment(!newComment)} className={clsx("w-12 h-6 shrink-0 rounded-full relative transition-colors duration-200", newComment ? "bg-primary" : "bg-surface-variant")}>
-                <div className={clsx("w-4 h-4 rounded-full absolute top-1 transition-transform duration-200", newComment ? "bg-on-primary translate-x-7" : "bg-on-surface-variant translate-x-1")}></div>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-surface-container-low border border-outline-variant/50 hover:border-primary/50 transition-colors">
-              <div>
-                <div className="font-bold text-on-surface mb-1">Cảnh báo chi tiêu quảng cáo</div>
-                <div className="text-sm text-on-surface-variant">Báo khi chiến dịch sắp hết ngân sách</div>
-              </div>
-              <button onClick={() => setAdsBudgetWarn(!adsBudgetWarn)} className={clsx("w-12 h-6 shrink-0 rounded-full relative transition-colors duration-200", adsBudgetWarn ? "bg-primary" : "bg-surface-variant")}>
-                <div className={clsx("w-4 h-4 rounded-full absolute top-1 transition-transform duration-200", adsBudgetWarn ? "bg-on-primary translate-x-7" : "bg-on-surface-variant translate-x-1")}></div>
               </button>
             </div>
           </div>
@@ -589,44 +560,33 @@ export default function TelegramAlerts() {
       <div className="bg-surface-container border border-outline-variant rounded-2xl p-6">
         <h2 className="text-lg font-bold text-on-surface mb-6">Tin nhắn Telegram sẽ trông thế nào</h2>
         
+        {/*
+          ẢNH MẪU — dựng đúng từng dòng của tin thật (services/telegram.ts sendOrderReport / sendHandoffAlert), dữ liệu là
+          ví dụ. Sửa tin thật thì sửa mẫu này theo. Tin thật không có liên kết bấm được, nên mẫu cũng không có.
+        */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-          {/* Khung 1 */}
-          <div className="bg-noi border border-outline-variant rounded-2xl rounded-tl-sm p-4 text-on-surface font-mono text-sm leading-relaxed shadow-lg relative">
-            <div className="absolute -left-2 top-0 w-4 h-4 bg-noi border-l border-t border-outline-variant rotate-[-45deg] translate-y-1 translate-x-1 -z-10"></div>
-            <div>
-              <span className="text-xl leading-none mr-2">🎉</span><span className="font-bold text-white text-base">ĐƠN HÀNG MỚI</span><br/><br/>
-              Khách: <span className="text-white font-medium">Nguyễn Thị Hoa</span><br/>
-              Số điện thoại: <span className="text-[#3390ec] font-medium">0987 123 456</span><br/>
-              Sản phẩm: <span className="text-white">Sản phẩm A</span><br/>
-              Số lượng: <span className="text-white">2</span><br/>
-              Tổng tiền: <span className="text-white font-bold">900.000 đ</span><br/>
-              Địa chỉ: <span className="text-white/60 italic">(khách chưa cung cấp)</span><br/><br/>
-              <span className="text-xs text-white/50">AI chốt lúc 14:19</span><br/>
-              <span className="text-[#3390ec] block mt-2">Xem chi tiết đơn hàng</span>
-            </div>
+          <div className="bg-noi border border-outline-variant rounded-2xl rounded-tl-sm p-4 text-on-surface font-mono text-sm leading-relaxed shadow-lg">
+            <span className="mr-2">🛒</span><b className="text-white">ĐƠN HÀNG MỚI</b><br/><br/>
+            <b className="text-white">Mã đơn:</b> DH261011-0001<br/>
+            <b className="text-white">Khách:</b> Nguyễn Thị Hoa<br/>
+            <b className="text-white">Điện thoại:</b> 0987 123 456<br/>
+            <b className="text-white">Địa chỉ:</b> Chưa có<br/><br/>
+            <b className="text-white">Sản phẩm:</b> Sản phẩm A<br/>
+            <b className="text-white">Số lượng:</b> 2<br/>
+            <b className="text-white">Tổng tiền:</b> 900.000 đ<br/><br/>
+            🤖 Do AI chốt
           </div>
 
-          {/*
-            Đây là ẢNH MẪU minh hoạ tin Telegram sẽ nhận được, không phải dữ
-            liệu thật. Hai dòng "Xem chi tiết đơn hàng" và "Mở đoạn chat" là
-            chữ trong ảnh mẫu, không phải nút — trước đây để href="#" nên trông
-            như bấm được mà bấm vào chỉ nhảy lên đầu trang.
-          */}
-          {/* Khung 2 */}
-          <div className="bg-noi border border-outline-variant rounded-2xl rounded-tl-sm p-4 text-on-surface font-mono text-sm leading-relaxed shadow-lg relative">
-            <div className="absolute -left-2 top-0 w-4 h-4 bg-noi border-l border-t border-outline-variant rotate-[-45deg] translate-y-1 translate-x-1 -z-10"></div>
-            <div>
-              <span className="text-xl leading-none mr-2">🔔</span><span className="font-bold text-white text-base">CẦN BẠN XỬ LÝ</span><br/><br/>
-              Khách: <span className="text-white font-medium">Trần Thị Mai</span><br/>
-              Lý do: <span className="text-white">Khách khiếu nại giao hàng</span><br/>
-              Tin nhắn cuối: <span className="text-[#3390ec] bg-[#3390ec]/10 px-1 rounded">'Đơn tôi đặt 3 hôm rồi sao chưa thấy ship?'</span><br/><br/>
-              <span className="text-xs text-[#ff595a]">Đã chờ 18 phút</span><br/>
-              <span className="text-[#3390ec] block mt-2">Mở đoạn chat</span>
-            </div>
+          <div className="bg-noi border border-outline-variant rounded-2xl rounded-tl-sm p-4 text-on-surface font-mono text-sm leading-relaxed shadow-lg">
+            <span className="mr-2">🔔</span><b className="text-white">KHÁCH CẦN NGƯỜI HỖ TRỢ</b><br/><br/>
+            <b className="text-white">Khách:</b> Trần Thị Mai<br/>
+            <b className="text-white">Kênh:</b> facebook<br/>
+            <b className="text-white">Lý do:</b> Khách khiếu nại giao hàng<br/><br/>
+            Vào hộp thư để tiếp quản hội thoại.
           </div>
         </div>
-        
-        <p className="text-xs text-on-surface-variant text-center">Bấm vào liên kết trong tin nhắn sẽ mở thẳng đúng đơn hàng hoặc đoạn chat đó</p>
+
+        <p className="text-xs text-on-surface-variant text-center">Mẫu minh hoạ — tin thật có đúng các dòng này, với dữ liệu của đơn / khách thật</p>
       </div>
 
       {/* HÀNG 4: LỊCH SỬ THÔNG BÁO */}
@@ -672,8 +632,9 @@ export default function TelegramAlerts() {
                         <span className="text-sm font-bold text-error flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">error</span> Gửi lỗi
                         </span>
-                        <button onClick={handleResend} disabled={busy} className="text-xs font-bold text-primary hover:underline bg-primary/10 px-2 py-0.5 rounded border border-primary/20 disabled:opacity-50" title={item.error ?? undefined}>
-                          Gửi lại
+                        {/* Tin cũ không lưu đủ để gửi lại y nguyên — nút này gửi tin thử để kiểm đường gửi đã thông chưa. */}
+                        <button onClick={handleSendTest} disabled={busy} className="text-xs font-bold text-primary hover:underline bg-primary/10 px-2 py-0.5 rounded border border-primary/20 disabled:opacity-50" title={item.error ? `Lỗi: ${item.error}` : undefined}>
+                          Gửi tin thử
                         </button>
                       </div>
                     )}

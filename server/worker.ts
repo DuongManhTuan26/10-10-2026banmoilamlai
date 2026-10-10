@@ -18,6 +18,7 @@ import { chayChoKenh } from "./services/ngu-canh-trang.js";
 import { ghiKenhTheoNgay } from "./services/trang.js";
 import { chupSoBaiNgay } from "./services/so-lieu-kenh.js";
 import { runDueDieuHanhNgay } from "./services/dieu-hanh-ngay.js";
+import { runDueKenhHong, runDueSapHet24h } from "./services/canh-bao-telegram.js";
 
 /**
  * Worker xử lý hàng đợi sự kiện.
@@ -63,6 +64,9 @@ let lanChiPhiCuoi = 0;
 /** Nhịp ngày của AI điều hành: quét 5 phút/lần xem khối não nào tới giờ báo cáo (mỗi trang một lần mỗi ngày). */
 const DIEU_HANH_INTERVAL_MS = 5 * 60_000;
 let lanDieuHanhCuoi = 0;
+/** Cảnh báo Telegram theo trạng thái (services/canh-bao-telegram.ts): sắp hết 24 giờ, kênh hỏng. */
+const CANH_BAO_INTERVAL_MS = 5 * 60_000;
+let lanCanhBaoCuoi = 0;
 /** Soát chi phí bên thứ ba mỗi giờ: tiền AI sắp hết, tiêu bất thường, nhà cung cấp tạm dừng. */
 const CHI_PHI_INTERVAL_MS = 60 * 60_000;
 /** Tra lại từng lượt AI với nhà cung cấp (họ chốt số chậm vài phút). */
@@ -542,6 +546,17 @@ export function startWorker(): void {
           if (so > 0) console.log(`[điều hành] Đã chạy nhịp ngày cho ${so} khối não.`);
         } catch (error) {
           console.error("[điều hành] Lỗi nhịp ngày:", error instanceof Error ? error.message : error);
+        }
+      }
+
+      if (Date.now() - lanCanhBaoCuoi >= CANH_BAO_INTERVAL_MS) {
+        lanCanhBaoCuoi = Date.now();
+        try {
+          const a = await coHanGio("cảnh báo sắp hết 24 giờ", runDueSapHet24h(), HAN_MOI_VIEC_MS);
+          const b = await coHanGio("cảnh báo kênh hỏng", runDueKenhHong(), HAN_MOI_VIEC_MS);
+          if (a + b > 0) console.warn(`[cảnh báo] Đã gửi ${a} tin sắp hết 24 giờ, ${b} tin kênh hỏng.`);
+        } catch (error) {
+          console.error("[cảnh báo] Lỗi:", error instanceof Error ? error.message : error);
         }
       }
 

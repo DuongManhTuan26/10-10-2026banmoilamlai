@@ -484,6 +484,13 @@ export interface Order {
   note: string | null;
   telegram_sent_at: string | null;
   created_at: string;
+  updated_at: string;
+  /** Hội thoại đã lên đơn này (null = đơn nhập tay). */
+  conversation_id: string | null;
+  /** Các dòng hàng của đơn nhiều sản phẩm; null với đơn một sản phẩm / đơn tạo trước 10/10/2026. */
+  items: { ten: string; so_luong: number; don_gia: number }[] | null;
+  /** Nguồn của lần chạm gần nhất trước khi chốt: 'quang_cao' | 'lien_ket' | 'binh_luan' | 'tu_nhan' | null. */
+  origin: string | null;
 }
 
 /**
@@ -1207,7 +1214,7 @@ export const api = {
   },
 
   orders: {
-    list: (params: { status?: string; search?: string } = {}) => {
+    list: (params: { status?: string; search?: string; soNgay?: string } = {}) => {
       const query = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
         if (value) query.set(key, value);

@@ -666,6 +666,11 @@ connectionsRouter.delete(
       `UPDATE social_accounts SET connected = FALSE, updated_at = now() WHERE id = $1`,
       [account.id]
     );
+    // Chủ shop TỰ ngắt — không báo Telegram "kênh mất kết nối" cho việc chính họ vừa làm (canh-bao-telegram.ts).
+    await query(
+      `INSERT INTO canh_bao_da_gui (user_id, loai, khoa) VALUES ($1, 'kenh_hong', $2) ON CONFLICT DO NOTHING`,
+      [chu.id, account.id]
+    );
 
     res.json({ success: true, message: "Đã ngắt kết nối" });
   })

@@ -13,7 +13,7 @@ import DangXemThay from './components/DangXemThay';
 import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import SetupComplete from './pages/SetupComplete';
-import { api, ApiError, type User } from './lib/api';
+import { api, ApiError, KHOA_TRANG_DANG_CHON, type User } from './lib/api';
 import { ActivePageProvider, useKhoiNao } from './lib/ActivePage';
 
 type AppState = 'loading' | 'auth' | 'onboarding' | 'setup_complete' | 'main';
@@ -95,6 +95,8 @@ export default function App() {
     } catch (error) {
       console.error('Đăng xuất thất bại:', error);
     }
+    // Quên trang đang chọn — người đăng nhập sau (máy dùng chung) không mang theo trang của người trước.
+    try { localStorage.removeItem(KHOA_TRANG_DANG_CHON); } catch { /* trình duyệt chặn localStorage */ }
     setUser(null);
     setAppState('auth');
   }, []);

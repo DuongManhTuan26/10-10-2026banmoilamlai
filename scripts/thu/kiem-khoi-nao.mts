@@ -57,7 +57,10 @@ kiem("Mỗi trang đủ 7 luật nhường người", h1.du?.data?.length === 7 
 // Đơn tạo tay thuộc trang đang chọn.
 r = await json(await A("/orders", T2, { method: "POST", body: JSON.stringify({ product: "SP", quantity: 1, unitPrice: 100000 }) }));
 kiem("Đơn tạo tay ở T2 → trang T2", r.ma === 201 && Number(r.du.data.trang_id) === T2, `${r.ma} ${r.du?.data?.trang_id}`);
-r = await json(await A("/orders", T1)); kiem("Danh sách đơn T1 không có đơn của T2", r.ma === 200 && r.du.data.length === 0, `${r.du?.data?.length}`);
+// Kiểm theo trang của từng đơn, không theo "T1 rỗng" — T1 có thể có đơn thử từ lần kiểm giao diện trước.
+r = await json(await A("/orders", T1));
+kiem("Danh sách đơn T1 không có đơn của T2", r.ma === 200 && r.du.data.every((o: any) => Number(o.trang_id) === T1),
+  `${r.du?.data?.map((o: any) => o.trang_id).join(",")}`);
 r = await json(await A("/orders", T2, { method: "POST", body: JSON.stringify({ product: "SP", conversationId: "hc-k-t1-0" }) }));
 kiem("Lên đơn ở T2 vào hội thoại của T1 → 404", r.ma === 404, `${r.ma}`);
 

@@ -42,6 +42,17 @@ async function loadConfig(
   return { ...config, token };
 }
 
+/**
+ * Loại thông báo `key` có đang bật không (công tắc trên trang Cảnh báo Telegram). `macDinh`: giá trị khi chủ shop chưa
+ * từng bấm công tắc đó — phải khớp cách giao diện hiển thị (TelegramAlerts.tsx). Chưa nối Telegram → false.
+ */
+export async function suKienBat(userId: number, key: string, macDinh: boolean): Promise<boolean> {
+  const config = await loadConfig(userId);
+  if (!config) return false;
+  const v = config.events?.[key];
+  return typeof v === "boolean" ? v : macDinh;
+}
+
 /** Thoát ký tự đặc biệt của HTML để tên khách có dấu < > & không phá vỡ tin nhắn. */
 /**
  * Thoát ký tự HTML trước khi ghép vào tin Telegram.

@@ -149,3 +149,16 @@ Mỗi mục: hiện tượng · căn cứ để gọi là lỗi · nguyên nhân
 - **Chưa đưa vào khối não:** báo cáo chuỗi 4 khâu (BaoCaoChuoi) vẫn chỉ ở màn Quản lý — cần dữ liệu tiền của một trang.
 - **Chưa chạy trên dữ liệu thật:** mọi kiểm thử chạy trên cơ sở dữ liệu thử; migration 047–050 cần sao lưu trước khi áp
   lên cơ sở dữ liệu thật.
+
+## TD-13 — Telegram: ba thông báo đã gỡ khỏi giao diện (chủ dự án quyết 11/10/2026)
+
+- **Hiện tượng (rà soát giao diện lượt 2, L4):** 6/8 công tắc trên trang Cảnh báo Telegram không có đường gửi nào phía
+  máy chủ. Chủ dự án chọn làm thật **Sắp hết 24 giờ** và **Kênh mất kết nối** (`services/canh-bao-telegram.ts`);
+  "Tổng kết cuối ngày" gộp vào báo cáo ngày của ④ AI Điều hành.
+- **Đã gỡ, chưa làm:**
+  - **Tổng kết tuần** — báo cáo ngày của AI điều hành đã gửi mỗi ngày; làm khi cần so sánh tuần.
+  - **Bình luận mới** — AI tự xử lý bình luận; báo từng cái rất phiền.
+  - **Cảnh báo chi tiêu quảng cáo** — làm cùng Bước 5 "AI quảng cáo tự tối ưu ngân sách" (TD-12), khi đọc được số chi
+    theo chiến dịch thật.
+- **Dữ liệu cũ:** khoá `weekly_summary`, `new_comment`, `ads_budget`, `daily_summary`, `dailySummaryTime` có thể còn
+  trong `telegram_configs.events` của shop cũ — vô hại, không còn ai đọc.

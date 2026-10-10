@@ -49,10 +49,18 @@ export async function moKhoiNao(
   return duoc ? { trangId: r.id, chuId: r.user_id, ten: r.ten } : null;
 }
 
+/**
+ * Đường dẫn CẤP TÀI KHOẢN — không thuộc khối não nào nên bỏ qua X-Trang. Trình duyệt còn nhớ trang của tài khoản đăng
+ * nhập trước (vd. máy dùng chung, đổi tài khoản) thì X-Trang đó không mở được với tài khoản mới; nếu cả đăng nhập và
+ * danh sách khối não cũng bị 404 theo thì không vào được ứng dụng, và giao diện không có cách nào tự về trang đúng.
+ */
+const CAP_TAI_KHOAN = (req: Request) =>
+  req.path.startsWith("/auth/") || (req.method === "GET" && req.path === "/khoi-nao");
+
 /** Gắn req.nao cho mọi yêu cầu /api đã đăng nhập. Trang gửi lên mà không được mở → 404 ngay, không rơi về trang khác. */
 export async function ganKhoiNao(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
-    if (!req.user) return next();
+    if (!req.user || CAP_TAI_KHOAN(req)) return next();
     const xTrang = req.get("x-trang");
     if (xTrang) {
       const nao = await moKhoiNao(req.user, Number(xTrang));
