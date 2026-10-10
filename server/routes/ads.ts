@@ -552,6 +552,57 @@ adsRouter.post(
       return;
     }
 
+    /*
+     * Dữ liệu đưa cho AI — GỌN và ĐỦ, không cắt cụt.
+     *
+     * Lỗi đã thấy khi rà 10/10/2026: bản trước nhét nguyên JSON chiến dịch rồi cắt ở 4.000 ký tự — tài khoản nhiều chiến
+     * dịch thì AI chỉ thấy vài cái đầu (cắt giữa chừng một chiến dịch) mà vẫn phân tích như đã thấy đủ. Nay rút mỗi chiến
+     * dịch còn các cột cần cho quyết định, xếp theo tiền đã chi, và NÓI RÕ đang xem bao nhiêu trên tổng số.
+     *
+     * Kèm ĐƠN HÀNG theo nguồn quảng cáo của chính trang (orders.origin_ad_id, migration 042): bản trước AI quảng cáo không
+     * hề biết quảng cáo nào ra đơn → chỉ tối ưu được theo số nền tảng tự báo (lượt nhấp, tin nhắn), đúng kiểu tối ưu nhầm
+     * chỉ số trung gian.
+     */
+    const TOI_DA_CHIEN_DICH = 40;
+    const so = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : null);
+    const dsChienDich = campaigns.campaigns
+      .map((raw) => {
+        const c = raw as Record<string, unknown>;
+        return {
+          ten: String(c.name ?? ""), trangThai: String(c.status ?? ""), mucTieu: String(c.objective ?? ""),
+          nganSachNgay: so(c.dailyBudget ?? c.daily_budget), daChi: so(c.spend),
+        };
+      })
+      .sort((a, b) => (b.daChi ?? 0) - (a.daChi ?? 0));
+    const xem = dsChienDich.slice(0, TOI_DA_CHIEN_DICH);
+    const dongIns = (insights?.data as Array<Record<string, unknown>> | undefined)?.[0];
+    const hanhDong = (loai: string) =>
+      so((dongIns?.actions as Array<Record<string, unknown>> | undefined)?.find((a) => a.action_type === loai)?.value);
+    const donQc = await query<{ ad: string; so: number; doanh_thu: string }>(
+      `SELECT origin_ad_id AS ad, count(*)::int AS so, coalesce(sum(total), 0)::text AS doanh_thu FROM orders
+        WHERE trang_id = $1 AND origin_ad_id IS NOT NULL AND status <> 'cancelled' AND created_at > now() - interval '30 days'
+        GROUP BY origin_ad_id ORDER BY 2 DESC LIMIT 30`,
+      [naoCua(req).trangId]
+    );
+    const donTong = await queryOne<{ so: number; tu_qc: number }>(
+      `SELECT count(*)::int AS so, count(*) FILTER (WHERE origin_ad_id IS NOT NULL)::int AS tu_qc FROM orders
+        WHERE trang_id = $1 AND status <> 'cancelled' AND created_at > now() - interval '30 days'`,
+      [naoCua(req).trangId]
+    );
+    const duLieuChoAi = [
+      `Tiền tệ: ${resolved.account.currency}`,
+      `CHIẾN DỊCH (đang xem ${xem.length}/${dsChienDich.length}, xếp theo tiền đã chi):`,
+      ...xem.map((c) => `- ${c.ten} · ${c.trangThai} · mục tiêu ${c.mucTieu || "?"} · ngân sách/ngày ${c.nganSachNgay ?? "?"} · đã chi ${c.daChi ?? "?"}`),
+      "",
+      "SỐ LIỆU 30 NGÀY (nền tảng tự báo — có thể thổi phồng):",
+      `- Đã chi: ${so(dongIns?.spend) ?? "?"} · Tiếp cận: ${so(dongIns?.reach) ?? "?"} · Hiển thị: ${so(dongIns?.impressions) ?? "?"} · Nhấp: ${so(dongIns?.clicks) ?? "?"}`,
+      `- Bắt đầu trò chuyện: ${hanhDong("onsite_conversion.messaging_conversation_started_7d") ?? "?"} · Bình luận: ${hanhDong("comment") ?? "?"}`,
+      "",
+      "ĐƠN HÀNG THẬT 30 NGÀY (hệ thống ghi nguồn lúc tạo đơn — đáng tin hơn số nền tảng):",
+      `- Tổng ${donTong?.so ?? 0} đơn, trong đó ${donTong?.tu_qc ?? 0} đơn có nguồn từ quảng cáo.`,
+      ...donQc.rows.map((d) => `- Quảng cáo ${d.ad}: ${d.so} đơn, doanh thu ${Number(d.doanh_thu).toLocaleString("vi-VN")}`),
+    ].join("\n");
+
     const config = await queryOne<{ system_prompt: string }>(
       "SELECT system_prompt FROM ai_configs WHERE trang_id = $1 AND kind = 'ads'",
       [naoCua(req).trangId]
@@ -574,16 +625,14 @@ adsRouter.post(
             (config?.system_prompt ??
               "Bạn là chuyên gia quảng cáo Facebook, phân tích bằng tiếng Việt.") +
             knowledge +
-            "\n\nChỉ dựa vào số liệu được cung cấp, tuyệt đối không bịa số. " +
+            "\n\nChỉ dựa vào số liệu được cung cấp, tuyệt đối không bịa số. Đánh giá quảng cáo theo ĐƠN HÀNG THẬT và tiền bỏ " +
+            "ra mỗi đơn trước, số nền tảng tự báo (nhấp, tiếp cận) chỉ là phụ. Danh sách chiến dịch bị rút gọn thì nói rõ. " +
             DAN_KHONG_MARKDOWN +
             ' Trả JSON: {"findings": string, "recommendation": string, "actions": string[]}',
         },
         {
           role: "user",
-          content:
-            `Tiền tệ: ${resolved.account.currency}\n` +
-            `Chiến dịch: ${JSON.stringify(campaigns.campaigns).slice(0, 4_000)}\n` +
-            `Số liệu 30 ngày: ${JSON.stringify(insights).slice(0, 4_000)}`,
+          content: duLieuChoAi,
         },
       ],
       validate: (value) => {
