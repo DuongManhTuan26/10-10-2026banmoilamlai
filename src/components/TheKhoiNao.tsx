@@ -70,6 +70,8 @@ export function NhatKyAi({ ai }: { ai: MaAi }) {
   const [du, setDu] = useState<DuLieuNhatKy | null>(null);
   const [loi, setLoi] = useState('');
   const [moDong, setMoDong] = useState<number | null>(null);
+  const [baoCao, setBaoCao] = useState<{ report_date: string; findings: string }[] | null>(null);
+  const [moBaoCao, setMoBaoCao] = useState<string | null>(null);
 
   useEffect(() => {
     let huy = false;
@@ -79,6 +81,8 @@ export function NhatKyAi({ ai }: { ai: MaAi }) {
       .nhatKy(ai)
       .then(({ data }) => !huy && setDu(data))
       .catch((e) => !huy && setLoi(e instanceof ApiError ? e.message : 'Chưa tải được nhật ký'));
+    // AI điều hành: các báo cáo ngày đã lập (services/dieu-hanh-ngay.ts).
+    if (ai === 'analytics') api.khoiNao.baoCaoNgay().then(({ data }) => !huy && setBaoCao(data)).catch(() => !huy && setBaoCao([]));
     return () => { huy = true; };
   }, [ai, nao?.trang_id]);
 
@@ -88,6 +92,31 @@ export function NhatKyAi({ ai }: { ai: MaAi }) {
 
   return (
     <div className="space-y-6">
+      {ai === 'analytics' && (
+        <div className={clsx('khung-muc', 'mau-xanh')}>
+          <h3 className="tieu-de-muc dau-muc">Báo cáo ngày đã lập</h3>
+          {!baoCao ? (
+            <p className="text-sm text-on-surface-variant">Đang tải…</p>
+          ) : baoCao.length === 0 ? (
+            <p className="text-sm text-on-surface-variant">Chưa có báo cáo ngày nào.</p>
+          ) : (
+            <div className="divide-y divide-outline-variant/60 rounded-xl border border-outline-variant bg-surface text-sm">
+              {baoCao.map((b) => (
+                <button key={b.report_date} type="button" onClick={() => setMoBaoCao(moBaoCao === b.report_date ? null : b.report_date)} className="w-full text-left px-4 py-2 hover:bg-surface-container">
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 tabular-nums text-on-surface-variant">{new Date(b.report_date).toLocaleDateString('vi-VN')}</span>
+                    <span className="flex-1 text-on-surface truncate">{b.findings.replace(/<\/?b>/g, '').split('\n').find((d) => d.startsWith('•')) ?? 'Báo cáo ngày'}</span>
+                    <span className="material-symbols-outlined text-[16px] text-on-surface-variant">{moBaoCao === b.report_date ? 'expand_less' : 'expand_more'}</span>
+                  </div>
+                  {moBaoCao === b.report_date && (
+                    <pre className="mt-2 whitespace-pre-wrap font-sans text-xs text-on-surface">{b.findings.replace(/<\/?b>/g, '')}</pre>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {(ai === 'content' || ai === 'analytics') && (
         <div className={clsx('khung-muc', motAi.mau)}>
           <h3 className="tieu-de-muc dau-muc">{ai === 'content' ? 'Việc AI đã tự làm theo lịch' : 'Các lần AI điều hành chẩn đoán'}</h3>
@@ -109,7 +138,8 @@ export function NhatKyAi({ ai }: { ai: MaAi }) {
           )}
         </div>
       )}
-      <div className={clsx('khung-muc', motAi.mau)}>
+      {/* Màu lam: liền sau khung "việc đã làm" (màu của AI) — hai phần liền nhau không cùng màu. */}
+      <div className={clsx('khung-muc', 'mau-lam')}>
         <h3 className="tieu-de-muc dau-muc">Thay đổi cài đặt, tài liệu, luật</h3>
         {du.thayDoi.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Chưa có thay đổi nào được ghi.</p>
