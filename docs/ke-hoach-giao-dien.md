@@ -113,3 +113,5 @@ lấy từ bảng B (lam · hồng · cam · xám) + số thứ tự, bước đ
 Khoá chống lùi: nhóm "giao diện lượt 2" trong `npm run kiem-tra` (1128 điểm, đã thử ngược trên mã cũ).
 Chưa xem bằng mắt được (cần Meta thật): biểu đồ quảng cáo có số, sau khi tạo quảng cáo.
 
+
+**Sửa lại theo chủ dự án (11/10/2026, sau khi làm sai ý):** T1 = bỏ bộ chọn trang ở ĐẦU MENU (và chip "Khối não" trên thanh trên); trang bán hàng quản lý DUY NHẤT ở mục "Kết nối kênh" (nhóm Dữ liệu của trang, tên cũ). T6 = GIỮ lưới "Các kênh có thể kết nối" và "Tài khoản đã kết nối", chỉ làm gọn (ô thấp tự co theo bề rộng, có tìm, nhãn phụ thành biểu tượng; tài khoản đã kết nối mỗi kênh một dòng) — BỎ hộp "Bạn muốn kết nối nền tảng nào?" (trùng lưới); bấm ô nền tảng mở thẳng bước kết nối.

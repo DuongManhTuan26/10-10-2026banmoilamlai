@@ -3416,9 +3416,10 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
   kiem("phân tầng", "chưa có trang nào thì không bày khối não rỗng",
     /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? \[/.test(nguonMenu) &&
       /const nhomDuLieu = coNao\s*\n\s*\? \[/.test(nguonMenu), true);
-  // Chọn trang ở mục "Trang & kênh" ngay dưới logo (bỏ ô chọn trùng ở menu — rà soát lượt 2, T1).
-  kiem("phân tầng", "mục chọn trang (Trang & kênh) chỉ hiện khi có trang để chọn hoặc là tài khoản quản lý",
-    /\{\(coNao \|\| laChuChuoi \|\| laQuanTri\) && renderNavGroup\(\[mucTrangKenh\]\)\}/.test(nguonMenu), true);
+  // Chủ dự án 11/10/2026: KHÔNG có bộ chọn trang ở đầu menu — trang bán hàng quản lý duy nhất ở Kết nối kênh.
+  kiem("phân tầng", "không có bộ chọn / mục trang ở đầu menu; Kết nối kênh nằm trong nhóm Dữ liệu của trang",
+    [/ChonKhoiNao|mucTrangKenh/.test(nguonMenu), /const nhomDuLieu = coNao\s*\n\s*\? \[[\s\S]{0,200}?name: 'Kết nối kênh', icon: 'cable', path: '\/ket-noi'/.test(nguonMenu)],
+    [false, true]);
 }
 
 // ---------------------------------------------------------------------------
@@ -5935,14 +5936,16 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   kiem("giao diện lượt 2", "vùng nội dung mang lớp màu miền theo đường dẫn",
     /<main className=\{`flex-1 overflow-y-auto custom-scrollbar pt-16 \$\{mien\}`\}>/.test(ma("src/App.tsx")), true);
   const menu = ma("src/components/Sidebar.tsx"), tren = ma("src/components/TopNavBar.tsx"), khuon = ma("src/components/KhuonAi.tsx");
-  kiem("giao diện lượt 2", "T1/T2/T10: bỏ ô chọn trang ở menu, bỏ dải 1→4 ở đầu AI, bỏ nhãn trang trí + chấm trực tuyến giả",
+  kiem("giao diện lượt 2", "T1/T2/T10: không bộ chọn trang ở đầu giao diện (menu, thanh trên), bỏ dải 1→4 ở đầu AI, bỏ nhãn trang trí + chấm trực tuyến giả",
     [/ChonKhoiNao/.test(menu), fs.existsSync(path.join(GOC, "src/components/ChonKhoiNao.tsx")), /BON_AI\.map/.test(khuon),
       tren.includes("TỰ ĐỘNG HÓA THỜI GIAN THỰC"), /bg-green-400 rounded-full border-2 border-background/.test(tren), /Khối não:/.test(tren)],
-    [false, false, false, false, false, true]);
+    [false, false, false, false, false, false]);
   const kn = ma("src/pages/Connections.tsx"), bang = ma("src/components/BangTrangBanHang.tsx");
-  kiem("giao diện lượt 2", "T6/§3: Trang & kênh dạng bảng (không lưới 20 thẻ, không thẻ 520px); bảng trang có tìm, lọc, 25 dòng mỗi trang",
-    [kn.includes("Các kênh có thể kết nối"), kn.includes("Tài khoản đã kết nối"), /<BangTrangBanHang \/>/.test(kn),
-      /const MOI_TRANG = 25;/.test(bang), /placeholder="Tìm trang, tài khoản, kênh…"/.test(bang)], [false, false, true, true, true]);
+  // Chủ dự án 11/10/2026: GIỮ lưới cổng kết nối + tài khoản đã kết nối, chỉ làm gọn; BỎ hộp "Bạn muốn kết nối nền tảng nào?" (trùng lưới).
+  kiem("giao diện lượt 2", "Kết nối kênh: giữ lưới cổng kết nối (gọn, có tìm) + tài khoản đã kết nối dạng dòng; bỏ hộp chọn nền tảng trùng; bảng trang 25 dòng",
+    [kn.includes("Các kênh có thể kết nối"), /placeholder="Tìm nền tảng…"/.test(kn), kn.includes("Tài khoản đã kết nối"),
+      kn.includes("Bạn muốn kết nối nền tảng nào?"), /setConnectStep\(1\)/.test(kn), /<BangTrangBanHang \/>/.test(kn), /const MOI_TRANG = 25;/.test(bang)],
+    [true, true, true, false, false, true, true]);
   kiem("giao diện lượt 2", "T3: Hộp thư một nút đổi người trả lời, một nút xem trên nền tảng, lọc kênh chỉ khi ≥ 2 kênh",
     [ma("src/pages/Inbox.tsx").includes("Người chat"), (ma("src/pages/Inbox.tsx").match(/Xem trên nền tảng/g) ?? []).length,
       /\{accounts\.length > 1 && \(/.test(ma("src/pages/Inbox.tsx"))], [false, 0, true]);

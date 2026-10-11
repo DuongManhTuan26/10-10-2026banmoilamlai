@@ -66,8 +66,8 @@ export default function Sidebar({
   /*
    * MENU THEO KHỐI NÃO (chủ dự án chốt 10/10/2026 — docs/khoi-nao.md).
    *
-   *   Trang & kênh                ← nơi DUY NHẤT chọn khối não (bỏ ô chọn trùng — rà soát lượt 2, T1)
    *   KHỐI NÃO AI                 ← 4 AI cố định, liền mạch, luôn đi cùng nhau
+   *   (Không có bộ chọn trang ở đầu menu — chủ dự án 11/10/2026: trang bán hàng quản lý DUY NHẤT ở Kết nối kênh.)
    *     Tổng quan khối não
    *     ① AI Nội dung · ② AI Quảng cáo · ③ AI Bán hàng · ④ AI Điều hành
    *   DỮ LIỆU CỦA TRANG           ← thứ thay đổi được để điều hướng AI
@@ -83,9 +83,10 @@ export default function Sidebar({
         ...BON_AI.map((a) => ({ name: a.ten, icon: a.bieuTuong, path: a.duong, so: a.so, mau: a.hex })),
       ]
     : [];
-  const mucTrangKenh = { name: 'Trang & kênh', icon: 'storefront', path: '/ket-noi' };
   const nhomDuLieu = coNao
     ? [
+        // Nơi DUY NHẤT quản lý trang bán hàng + kênh (chọn khối não, nối kênh).
+        { name: 'Kết nối kênh', icon: 'cable', path: '/ket-noi' },
         { name: 'Báo cáo Telegram', icon: 'notifications_active', path: '/telegram' },
       ]
     : [];
@@ -213,11 +214,8 @@ export default function Sidebar({
         </div>
 
         <nav className="flex flex-col min-h-0 overflow-y-auto no-scrollbar">
-          {/* Trang & kênh ngay dưới logo: nơi chọn khối não (trang bán hàng) và nối kênh. */}
-          {(coNao || laChuChuoi || laQuanTri) && renderNavGroup([mucTrangKenh])}
           {coNao && (
             <>
-              <div style={{ height: '20px', flexShrink: 0 }}></div>
               {nhan('Khối não AI')}
               {/* Viền bao trọn 4 AI: một khối liền mạch, không tách rời. */}
               <div className="rounded-2xl border border-white/10 p-1.5 shrink-0" style={{ background: 'rgba(255,255,255,0.02)' }}>

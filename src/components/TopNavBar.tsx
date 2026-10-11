@@ -1,7 +1,6 @@
 import { BON_AI } from '../lib/bon-ai';
-import { useKhoiNao } from '../lib/ActivePage';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError, type User } from '../lib/api';
 import DoiMatKhau from './DoiMatKhau';
 
@@ -15,7 +14,6 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
   gocPhai?: ReactNode;
 }) {
   const location = useLocation();
-  const { nao } = useKhoiNao();
   const [menuMo, setMenuMo] = useState(false);
   const [doiMatKhauMo, setDoiMatKhauMo] = useState(false);
   const navigate = useNavigate();
@@ -51,7 +49,7 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
     if (ai) return ai.ten;
     switch (location.pathname) {
       case '/': return 'Tổng quan khối não';
-      case '/ket-noi': return 'Trang & kênh';
+      case '/ket-noi': return 'Kết nối kênh';
       case '/telegram': return 'Báo cáo Telegram';
       case '/pricing': return 'Gói dịch vụ';
       // Cùng một màn hình quản lý cho cả hai tầng — cùng tiêu đề.
@@ -82,21 +80,6 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
           <span className="material-symbols-outlined">menu</span>
         </button>
         <h1 className="text-xl sm:text-2xl font-bold truncate" style={{ color: mauTieuDe }}>{getPageTitle()}</h1>
-        {/*
-          Khối não đang làm việc (thay nhãn trang trí "TỰ ĐỘNG HÓA THỜI GIAN THỰC" — rà soát lượt 2, T10). Đổi khối não ở
-          Trang & kênh — nơi duy nhất chọn trang (bỏ bộ chọn trùng ở thanh menu, T1).
-        */}
-        {nao && (
-          <Link
-            to="/ket-noi"
-            title="Đổi trang bán hàng ở Trang & kênh"
-            className="hidden md:flex items-center gap-1.5 min-w-0 ml-2 px-3 py-1 rounded-full border border-white/15 text-sm text-on-surface-variant hover:text-on-surface hover:border-white/30 transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px] shrink-0">storefront</span>
-            <span className="shrink-0">Khối não:</span>
-            <b className="text-on-surface truncate max-w-[260px]">{nao.ten}</b>
-          </Link>
-        )}
       </div>
       <div className="flex items-center gap-base">
         {gocPhai}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import HopThoai, { NUT_CHINH, NUT_PHU } from '../components/HopThoai';
+import HopThoai, { NUT_PHU } from '../components/HopThoai';
 import { clsx } from 'clsx';
 import { api, ApiError, type Platform, type SocialAccount } from '../lib/api';
 import { useActivePage } from '../lib/ActivePage';
@@ -245,14 +245,17 @@ export default function Connections() {
    */
   const accessCode = 'ZRN-' + (selectedPlatform?.id ?? '').toUpperCase().padEnd(6, 'X').slice(0, 6);
 
+  const luoiKenhRef = useRef<HTMLDivElement>(null);
+  const [timKenh, setTimKenh] = useState('');
   const handleOpenConnect = (platform?: Platform) => {
     setErrorMessage('');
     if (platform) {
       setSelectedPlatform(platform);
       setConnectStep(2);
     } else {
-      setSelectedPlatform(null);
-      setConnectStep(1);
+      // Chưa chọn nền tảng: đưa tới lưới cổng kết nối (không còn hộp chọn nền tảng trùng).
+      luoiKenhRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
     }
     setLoginSuccess(false);
     setSelectedPages([]);
@@ -556,13 +559,7 @@ export default function Connections() {
         - Bỏ ô chọn trang ở thanh menu → bảng "Trang bán hàng" (tìm, lọc, gom theo tài khoản, 25 dòng mỗi trang).
         - Thẻ tài khoản 520px → mỗi kênh một dòng; bấm dòng mới hiện quyền đã cấp và các nút thao tác.
       */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <p className="text-on-surface-variant text-sm">Chọn trang bán hàng để mở khối não của nó, và nối các kênh cho trang đang mở.</p>
-        <button onClick={() => handleOpenConnect()} className={clsx(NUT_CHINH, 'h-11 px-5 text-sm shrink-0')}>
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          Kết nối kênh
-        </button>
-      </div>
+      <p className="text-on-surface-variant text-sm mb-5">Quản lý trang bán hàng (mở khối não của trang) và các kênh kết nối của trang đang mở.</p>
 
       {/* Tình trạng chung — một dòng, màu theo mức quan trọng (đỏ mất kết nối · cam sắp hết hạn · ✓ trắng ổn). */}
       {!taiThatBai && (
@@ -591,16 +588,85 @@ export default function Connections() {
 
       <BangTrangBanHang />
 
-      {/* KÊNH CỦA TRANG ĐANG MỞ — mỗi kênh một dòng. */}
+      {/*
+        CÁC KÊNH CÓ THỂ KẾT NỐI — giữ lưới cổng kết nối (chủ dự án 11/10/2026), làm GỌN để chịu được rất nhiều kênh:
+        ô thấp (một hàng biểu tượng + tên + nhãn nhỏ), 2→6 cột theo bề rộng, ô tìm nền tảng, ba nhóm như cũ. Nhãn
+        "Chỉ đăng bài" / "Lưu ý" nằm dòng dưới tên — bản cũ đặt cùng hàng nên đè lên tên và nút "+".
+      */}
+      <section ref={luoiKenhRef} className="khung-muc mau-lam mb-6 scroll-mt-6">
+        <div className="dau-muc flex flex-wrap items-center justify-between gap-3">
+          <h3 className="tieu-de-muc">Các kênh có thể kết nối</h3>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant">search</span>
+            <input
+              value={timKenh}
+              onChange={(e) => setTimKenh(e.target.value)}
+              placeholder="Tìm nền tảng…"
+              className="h-9 w-52 pl-8 pr-3 rounded-lg bg-surface-container-high border border-outline-variant text-sm text-on-surface focus:outline-none focus:border-on-surface"
+            />
+          </div>
+        </div>
+        <div className="space-y-5">
+          {([
+            ['Mạng xã hội', 'share', liveSocialChannels, ''],
+            ['Tài khoản quảng cáo', 'campaign', liveAdChannels, 'Chạy và theo dõi chiến dịch ngay trong app.'],
+            ['Tin nhắn và điện thoại', 'forum', liveCommChannels, 'Nhắn tin hoặc gọi cho khách sau khi AI đã lấy được số điện thoại.'],
+          ] as [string, string, Platform[], string][]).map(([ten, icon, ds, ghiChu]) => {
+            const loc = ds.filter((c) => !timKenh.trim() || c.name.toLowerCase().includes(timKenh.trim().toLowerCase()));
+            if (loc.length === 0) return null;
+            return (
+              <div key={ten}>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="material-symbols-outlined text-[18px] text-on-surface-variant self-center">{icon}</span>
+                  <span className="text-sm font-bold text-on-surface">{ten}</span>
+                  <span className="text-xs text-on-surface-variant">
+                    {ds.filter((c) => c.connected).length}/{ds.length} đã kết nối{ghiChu && ` · ${ghiChu}`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2">
+                  {loc.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => (c.connected ? setKenhMo(accounts.find((a) => a.platform === c.platformKey)?.id ?? null) : handleOpenConnect(c))}
+                      title={c.warnings?.[0] ?? (c.connected ? 'Đã kết nối — xem bên dưới' : `Kết nối ${c.name}`)}
+                      className={clsx('flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors min-w-0',
+                        c.connected ? 'border-white/30 bg-white/5' : 'border-outline-variant hover:border-on-surface/40 hover:bg-surface-container-high')}
+                    >
+                      <span className="material-symbols-outlined text-[20px] text-on-surface shrink-0">{c.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-on-surface truncate">{c.name}</span>
+                        <span className="flex items-center gap-1.5 text-[11px] text-on-surface-variant whitespace-nowrap">
+                          {c.connected ? <span className="text-on-surface">✓ Đã kết nối</span> : <span>Kết nối</span>}
+                          {/* Nhãn phụ thành biểu tượng nhỏ (rê chuột để đọc) — giữ một dòng, không đè chữ. */}
+                          {c.publishOnly && (
+                            <span className="inline-flex" title="Chỉ đăng bài — không có tin nhắn / bình luận cho AI bán hàng">
+                              <span className="material-symbols-outlined text-[14px]">edit_note</span>
+                            </span>
+                          )}
+                          {c.warnings && c.warnings.length > 0 && (
+                            <span className="inline-flex text-canh-bao" title={`Lưu ý: ${c.warnings.join(' ')}`}>
+                              <span className="material-symbols-outlined text-[14px]">warning</span>
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                      {!c.connected && <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0">add_circle</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* TÀI KHOẢN ĐÃ KẾT NỐI (của trang đang mở) — mỗi kênh một dòng; bấm dòng mới hiện quyền + thao tác. */}
       <section className="khung-muc mb-8">
-        <h3 className="tieu-de-muc dau-muc">Kênh của trang {nao?.ten ?? ''}</h3>
+        <h3 className="tieu-de-muc dau-muc">Tài khoản đã kết nối — trang {nao?.ten ?? ''}</h3>
         {accounts.length === 0 ? (
           <div className="py-8 text-center">
             <p className="font-bold text-on-surface">Trang này chưa nối kênh nào</p>
-            <p className="text-sm text-on-surface-variant mt-1">Nối Fanpage, Instagram, TikTok… để AI bắt đầu làm việc.</p>
-            <button onClick={() => handleOpenConnect()} className={clsx(NUT_PHU, 'mt-4 h-10 text-sm')}>
-              <span className="material-symbols-outlined text-[18px]">add</span> Kết nối kênh
-            </button>
+            <p className="text-sm text-on-surface-variant mt-1">Chọn một nền tảng ở lưới "Các kênh có thể kết nối" bên trên để AI bắt đầu làm việc.</p>
           </div>
         ) : (
           <div className="divide-y divide-outline-variant/60 -mx-1">
@@ -749,84 +815,10 @@ export default function Connections() {
                 </div>
               )}
 
-              {connectStep === 1 && (
-                <>
-                  <h2 className="text-2xl font-bold text-on-surface mb-6">Bạn muốn kết nối nền tảng nào?</h2>
-                  <div className="space-y-10">
-                    <div>
-                      <h3 className="tieu-de-muc mb-4">MẠNG XÃ HỘI</h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                        {liveSocialChannels.map((channel) => (
-                          <button
-                            key={channel.id}
-                            onClick={() => setSelectedPlatform({ id: channel.id, name: channel.name, icon: channel.icon, connectionType: channel.connectionType || 'oauth_simple', selectionLabel: channel.selectionLabel })}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
-                              selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary" 
-                                : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                            )}
-                          >
-                            <span className={clsx("material-symbols-outlined text-[32px] mb-2", selectedPlatform?.id === channel.id ? "text-primary" : "text-on-surface")}>{channel.icon}</span>
-                            <span className="text-xs font-bold text-on-surface text-center leading-tight">{channel.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="tieu-de-muc mb-4">TÀI KHOẢN QUẢNG CÁO</h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                        {liveAdChannels.map((channel) => (
-                          <button
-                            key={channel.id}
-                            onClick={() => setSelectedPlatform({ id: channel.id, name: channel.name, icon: channel.icon, connectionType: channel.connectionType || 'oauth_simple', selectionLabel: channel.selectionLabel })}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
-                              selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary" 
-                                : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                            )}
-                          >
-                            <span className={clsx("material-symbols-outlined text-[32px] mb-2", selectedPlatform?.id === channel.id ? "text-primary" : "text-on-surface")}>{channel.icon}</span>
-                            <span className="text-xs font-bold text-on-surface text-center leading-tight">{channel.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="tieu-de-muc mb-4">TIN NHẮN VÀ ĐIỆN THOẠI</h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                        {liveCommChannels.map((channel) => (
-                          <button
-                            key={channel.id}
-                            onClick={() => setSelectedPlatform({ id: channel.id, name: channel.name, icon: channel.icon, connectionType: channel.connectionType || 'oauth_simple', selectionLabel: channel.selectionLabel })}
-                            className={clsx(
-                              "flex flex-col items-center justify-center p-4 rounded-xl border relative transition-all duration-200",
-                              selectedPlatform?.id === channel.id 
-                                ? "bg-primary/10 border-primary" 
-                                : "bg-surface-container border-outline-variant hover:bg-surface-container-high hover:border-outline"
-                            )}
-                          >
-                            <span className={clsx("material-symbols-outlined text-[32px] mb-2", selectedPlatform?.id === channel.id ? "text-primary" : "text-on-surface")}>{channel.icon}</span>
-                            <span className="text-xs font-bold text-on-surface text-center leading-tight">{channel.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-8 flex justify-end">
-                    <button 
-                      disabled={!selectedPlatform}
-                      onClick={() => setConnectStep(2)}
-                      className="py-3 px-8 bg-primary text-on-primary font-bold rounded-xl hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none"
-                    >
-                      Tiếp tục
-                    </button>
-                  </div>
-                </>
-              )}
-
+              {/*
+                Bước "Bạn muốn kết nối nền tảng nào?" đã bỏ — trùng lưới "Các kênh có thể kết nối" ngay trên trang
+                (chủ dự án 11/10/2026). Hộp này mở thẳng từ bước của nền tảng đã bấm trong lưới.
+              */}
               {connectStep === 2 && selectedPlatform?.connectionType === 'manual_credentials' && (
                 <>
                   <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6">
