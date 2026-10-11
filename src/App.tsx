@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import TopNavBar from './components/TopNavBar';
 import ErrorBoundary from './components/ErrorBoundary';
-import { TongQuanKhoiNao, NoiDungAi, QuangCaoAi, BanHangAi, DieuHanhAi } from './pages/KhoiNao';
+import { TongQuan, NoiDungAi, QuangCaoAi, BanHangAi, DieuHanhAi } from './pages/KhoiNao';
 import TelegramAlerts from './pages/TelegramAlerts';
 import Connections from './pages/Connections';
 import Pricing from './pages/Pricing';
@@ -219,7 +219,7 @@ function TuyenKhoiNao({ user }: { user: User | null }) {
   return (
     <div key={nao?.trang_id ?? 'chua-co'} className="contents">
     <Routes>
-      <Route path="/" element={<TongQuanKhoiNao />} />
+      <Route path="/" element={<TongQuan />} />
       <Route path="/noi-dung" element={<NoiDungAi />} />
       <Route path="/quang-cao" element={<QuangCaoAi />} />
       <Route path="/ban-hang" element={<BanHangAi />} />

@@ -8,7 +8,7 @@
  * Route khối não lấy trang bằng `naoCua(req)` — không tự đoán, không lọc dữ liệu khối não bằng req.user.id.
  */
 import type { NextFunction, Request, Response } from "express";
-import { queryOne } from "./db.js";
+import { query, queryOne } from "./db.js";
 import { AppError } from "./http.js";
 import { layTrangDangChon } from "./services/trang.js";
 
@@ -78,6 +78,22 @@ export async function ganKhoiNao(req: Request, _res: Response, next: NextFunctio
   } catch (error) {
     next(error);
   }
+}
+
+/**
+ * Mọi trang người đăng nhập được xem — phạm vi của TỔNG QUAN TOÀN HỆ THỐNG (chủ dự án 11/10/2026: tổng quan là của toàn
+ * bộ hệ thống, không chỉ một khối não). Cùng quy tắc với moKhoiNao: trang của mình · chủ chuỗi thêm trang của tài khoản
+ * con · quản trị tổng thấy mọi trang.
+ */
+export async function dsTrangMoDuoc(user: { id: number; role: string }): Promise<number[]> {
+  const r = await query<{ id: number }>(
+    `SELECT t.id::int AS id
+       FROM trang t JOIN users u ON u.id = t.user_id
+      WHERE u.is_active
+        AND (t.user_id = $1 OR $2 = 'admin' OR ($2 = 'admin_con' AND u.parent_id = $1))`,
+    [user.id, user.role]
+  );
+  return r.rows.map((x) => x.id);
 }
 
 /** Khối não của yêu cầu — route khối não gọi hàm này; chưa có trang thì báo rõ, không đoán. */

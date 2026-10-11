@@ -3414,12 +3414,19 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
    */
   const nguonMenu = fs.readFileSync(path.join(GOC, "src/components/Sidebar.tsx"), "utf8");
   kiem("phân tầng", "chưa có trang nào thì không bày khối não rỗng",
-    /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? \[/.test(nguonMenu) &&
+    /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? BON_AI\.map/.test(nguonMenu) &&
       /const nhomDuLieu = coNao\s*\n\s*\? \[/.test(nguonMenu), true);
   // Chủ dự án 11/10/2026: KHÔNG có bộ chọn trang ở đầu menu — trang bán hàng quản lý duy nhất ở Kết nối kênh.
-  kiem("phân tầng", "không có bộ chọn / mục trang ở đầu menu; Kết nối kênh nằm trong nhóm Dữ liệu của trang",
-    [/ChonKhoiNao|mucTrangKenh/.test(nguonMenu), /const nhomDuLieu = coNao\s*\n\s*\? \[[\s\S]{0,200}?name: 'Kết nối kênh', icon: 'cable', path: '\/ket-noi'/.test(nguonMenu)],
-    [false, true]);
+  // Chủ dự án 11/10/2026: thứ tự Tổng quan → Kết nối kênh (luôn hiện, trước khối não) → Khối não AI (không bọc khung)
+  // → Dữ liệu của trang → Quản lý (Gói dịch vụ, Quản lý tài khoản CUỐI CÙNG).
+  const viTri = (re: RegExp) => nguonMenu.search(re);
+  kiem("phân tầng", "menu: không bộ chọn trang; Tổng quan → Kết nối kênh (luôn hiện) → Khối não AI (không bọc khung) → Dữ liệu → Quản lý (Quản lý tài khoản cuối)",
+    [/ChonKhoiNao|mucTrangKenh/.test(nguonMenu),
+      viTri(/\{renderNavGroup\(\[mucTongQuan\]\)\}/) > 0 && viTri(/\{renderNavGroup\(\[mucKetNoi\]\)\}/) > viTri(/\{renderNavGroup\(\[mucTongQuan\]\)\}/)
+        && viTri(/\{renderNavGroup\(nhomNao\)\}/) > viTri(/\{renderNavGroup\(\[mucKetNoi\]\)\}/),
+      /rounded-2xl border border-white\/10 p-1\.5/.test(nguonMenu),
+      /\{ name: 'Gói Dịch Vụ'[^\n]*\n[\s\S]*?'\/quan-ly-trang'[\s\S]*?'\/admin'/.test(nguonMenu)],
+    [false, true, false, true]);
 }
 
 // ---------------------------------------------------------------------------
@@ -5784,11 +5791,15 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
   const doc2 = (f: string) => fs.readFileSync(path.join(GOC, f), "utf8");
   const ma = (f: string) => boChuThich(doc2(f));
   // 1. Route khối não không lọc dữ liệu bằng tài khoản người đăng nhập — chỉ qua naoCua(req).
-  for (const f of ["inbox", "orders", "posts", "ai", "ads", "dashboard", "analytics"]) {
+  for (const f of ["inbox", "orders", "posts", "ai", "ads", "analytics"]) {
     const m = ma(`server/routes/${f}.ts`);
     kiem("khối não", `routes/${f}.ts: dữ liệu khối não chỉ lấy qua naoCua(req), không dùng req.user.id`,
       [/req\.user!?\.id/.test(m), /naoCua\(req\)/.test(m)], [false, true]);
   }
+  // Tổng quan là của TOÀN HỆ THỐNG (chủ dự án 11/10/2026): mọi trang người này được xem, theo đúng quy tắc quyền khối não.
+  kiem("khối não", "routes/dashboard.ts: tổng quan toàn hệ thống — gộp mọi trang được xem (dsTrangMoDuoc), không lọc bằng req.user.id",
+    [/req\.user!?\.id/.test(ma("server/routes/dashboard.ts")), (ma("server/routes/dashboard.ts").match(/await dsTrangMoDuoc\(req\.user!\)/g) ?? []).length >= 4,
+      /t\.user_id = \$1 OR \$2 = 'admin' OR \(\$2 = 'admin_con' AND u\.parent_id = \$1\)/.test(ma("server/khoi-nao.ts"))], [false, true, true]);
   const caiDat = ma("server/routes/settings.ts");
   kiem("khối não", "routes/settings.ts: req.user.id chỉ còn ở người nhận Telegram (chủ chuỗi chưa mở trang)",
     (caiDat.match(/req\.user!\.id/g) ?? []).length, 2);

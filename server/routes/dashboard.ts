@@ -3,7 +3,7 @@ import { query, queryOne } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { route } from "../http.js";
 
-import { naoCua } from "../khoi-nao.js";
+import { dsTrangMoDuoc } from "../khoi-nao.js";
 export const dashboardRouter = Router();
 
 dashboardRouter.use(requireAuth);
@@ -18,28 +18,28 @@ dashboardRouter.use(requireAuth);
 dashboardRouter.get(
   "/stats",
   route(async (req, res) => {
-    // Số của KHỐI NÃO đang chọn (docs/khoi-nao.md).
-    const trangId = naoCua(req).trangId;
+    // TỔNG QUAN TOÀN HỆ THỐNG: mọi trang người này được xem (không chỉ khối não đang mở).
+    const trangId = await dsTrangMoDuoc(req.user!);
     const range = req.query.range === "30d" ? 30 : req.query.range === "7d" ? 7 : 1;
 
     const stats = await queryOne<Record<string, number>>(
       `SELECT
          (SELECT COUNT(*) FROM orders
-           WHERE trang_id = $1 AND created_at >= now() - ($2 || ' days')::interval)     AS orders_count,
+           WHERE trang_id = ANY($1::bigint[]) AND created_at >= now() - ($2 || ' days')::interval)     AS orders_count,
          (SELECT COALESCE(SUM(total), 0) FROM orders
-           WHERE trang_id = $1 AND status <> 'cancelled'
+           WHERE trang_id = ANY($1::bigint[]) AND status <> 'cancelled'
              AND created_at >= now() - ($2 || ' days')::interval)                      AS revenue,
          (SELECT COUNT(*) FROM customers
-           WHERE trang_id = $1 AND first_seen_at >= now() - ($2 || ' days')::interval)  AS new_customers,
-         (SELECT COUNT(*) FROM conversations WHERE trang_id = $1 AND status <> 'done')  AS open_conversations,
-         (SELECT COUNT(*) FROM conversations WHERE trang_id = $1
+           WHERE trang_id = ANY($1::bigint[]) AND first_seen_at >= now() - ($2 || ' days')::interval)  AS new_customers,
+         (SELECT COUNT(*) FROM conversations WHERE trang_id = ANY($1::bigint[]) AND status <> 'done')  AS open_conversations,
+         (SELECT COUNT(*) FROM conversations WHERE trang_id = ANY($1::bigint[])
             AND status = 'waiting_human')                                              AS waiting_human,
-         (SELECT COUNT(*) FROM social_accounts WHERE trang_id = $1 AND connected)       AS connected_accounts,
+         (SELECT COUNT(*) FROM social_accounts WHERE trang_id = ANY($1::bigint[]) AND connected)       AS connected_accounts,
          (SELECT COUNT(*) FROM messages
-           WHERE trang_id = $1 AND sender_type = 'ai'
+           WHERE trang_id = ANY($1::bigint[]) AND sender_type = 'ai'
              AND created_at >= now() - ($2 || ' days')::interval)                      AS ai_messages,
          (SELECT COUNT(*) FROM orders
-           WHERE trang_id = $1 AND closed_by = 'ai'
+           WHERE trang_id = ANY($1::bigint[]) AND closed_by = 'ai'
              AND created_at >= now() - ($2 || ' days')::interval)                      AS ai_closed_orders`,
       [trangId, String(range)]
     );
@@ -48,7 +48,7 @@ dashboardRouter.get(
       `SELECT o.id, o.code, o.customer_name, o.product, o.quantity, o.total,
               o.status, o.closed_by, o.created_at
          FROM orders o
-        WHERE o.trang_id = $1
+        WHERE o.trang_id = ANY($1::bigint[])
         ORDER BY o.created_at DESC
         LIMIT 5`,
       [trangId]
@@ -60,7 +60,7 @@ dashboardRouter.get(
               cu.name AS customer_name, c.platform
          FROM conversations c
          LEFT JOIN customers cu ON cu.id = c.customer_id
-        WHERE c.trang_id = $1 AND c.status = 'waiting_human'
+        WHERE c.trang_id = ANY($1::bigint[]) AND c.status = 'waiting_human'
         ORDER BY c.last_message_at ASC
         LIMIT 5`,
       [trangId]
@@ -69,7 +69,7 @@ dashboardRouter.get(
     const latestReport = await queryOne(
       `SELECT report_date, findings, recommendation, metrics
          FROM ai_reports
-        WHERE trang_id = $1 AND kind = 'daily'
+        WHERE trang_id = ANY($1::bigint[]) AND kind = 'daily'
         ORDER BY report_date DESC LIMIT 1`,
       [trangId]
     );
@@ -93,8 +93,8 @@ dashboardRouter.get(
 dashboardRouter.get(
   "/sparklines",
   route(async (req, res) => {
-    // Số của KHỐI NÃO đang chọn (docs/khoi-nao.md).
-    const trangId = naoCua(req).trangId;
+    // TỔNG QUAN TOÀN HỆ THỐNG: mọi trang người này được xem (không chỉ khối não đang mở).
+    const trangId = await dsTrangMoDuoc(req.user!);
 
     const series = await query<{
       day: string;
@@ -115,16 +115,16 @@ dashboardRouter.get(
        */
       `SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
               (SELECT COUNT(*) FROM messages m
-                WHERE m.trang_id = $1
+                WHERE m.trang_id = ANY($1::bigint[])
                   AND date_trunc('day', m.sent_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = d.day)::int  AS messages,
               (SELECT COUNT(*) FROM messages m
-                WHERE m.trang_id = $1 AND m.sender_type = 'ai'
+                WHERE m.trang_id = ANY($1::bigint[]) AND m.sender_type = 'ai'
                   AND date_trunc('day', m.sent_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = d.day)::int  AS ai_messages,
               (SELECT COUNT(*) FROM orders o
-                WHERE o.trang_id = $1
+                WHERE o.trang_id = ANY($1::bigint[])
                   AND date_trunc('day', o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = d.day)::int AS orders,
               (SELECT COUNT(*) FROM customers c
-                WHERE c.trang_id = $1
+                WHERE c.trang_id = ANY($1::bigint[])
                   AND date_trunc('day', c.first_seen_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = d.day)::int AS customers
          FROM generate_series(
                 date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') - interval '6 days',
@@ -177,25 +177,25 @@ dashboardRouter.get(
       `(SELECT 'order' AS kind,
                'Chốt đơn ' || code || COALESCE(' cho ' || customer_name, '') AS content,
                created_at AS at
-          FROM orders WHERE trang_id = $1
+          FROM orders WHERE trang_id = ANY($1::bigint[])
          ORDER BY created_at DESC LIMIT 8)
        UNION ALL
        (SELECT 'handoff' AS kind,
                'AI nhường quyền: ' || COALESCE(handoff_reason, 'cần người hỗ trợ') AS content,
                handoff_at AS at
           FROM conversations
-         WHERE trang_id = $1 AND handoff_at IS NOT NULL
+         WHERE trang_id = ANY($1::bigint[]) AND handoff_at IS NOT NULL
          ORDER BY handoff_at DESC LIMIT 8)
        UNION ALL
        (SELECT 'ai_reply' AS kind,
                'AI trả lời: ' || left(content, 60) AS content,
                sent_at AS at
           FROM messages
-         WHERE trang_id = $1 AND sender_type = 'ai'
+         WHERE trang_id = ANY($1::bigint[]) AND sender_type = 'ai'
          ORDER BY created_at DESC LIMIT 8)
        ORDER BY at DESC
        LIMIT 12`,
-      [naoCua(req).trangId]
+      [await dsTrangMoDuoc(req.user!)]
     );
 
     const colors: Record<string, string> = {
@@ -239,11 +239,11 @@ dashboardRouter.get(
                 interval '1 day'
               ) AS d(day)
          LEFT JOIN orders o
-                ON o.trang_id = $2
+                ON o.trang_id = ANY($2::bigint[])
                AND date_trunc('day', o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = d.day
         GROUP BY d.day
         ORDER BY d.day`,
-      [days, naoCua(req).trangId]
+      [days, await dsTrangMoDuoc(req.user!)]
     );
 
     res.json({ success: true, data: rows.rows });

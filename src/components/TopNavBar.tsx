@@ -48,14 +48,14 @@ export default function TopNavBar({ user, avatarUrl, onMoMenu, gocPhai }: {
     const ai = BON_AI.find((a) => a.duong === location.pathname);
     if (ai) return ai.ten;
     switch (location.pathname) {
-      case '/': return 'Tổng quan khối não';
+      case '/': return 'Tổng quan';
       case '/ket-noi': return 'Kết nối kênh';
       case '/telegram': return 'Báo cáo Telegram';
       case '/pricing': return 'Gói dịch vụ';
       // Cùng một màn hình quản lý cho cả hai tầng — cùng tiêu đề.
       case '/quan-ly-trang': return 'Quản lý tài khoản';
       case '/admin': return 'Quản lý tài khoản';
-      default: return 'Tổng quan khối não';
+      default: return 'Tổng quan';
     }
   };
 

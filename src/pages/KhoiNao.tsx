@@ -20,6 +20,7 @@ import Orders from './Orders';
 import AutoScripts from './AutoScripts';
 import Analytics from './Analytics';
 import AnToanTaiKhoan from '../components/AnToanTaiKhoan';
+import Dashboard from './Dashboard';
 import { useKhoiNao } from '../lib/ActivePage';
 import { BON_AI, aiTheoMa } from '../lib/bon-ai';
 import { api, type ChiSoSucKhoe, type SucKhoeTrang } from '../lib/api';
@@ -176,7 +177,21 @@ function tinhTrang(du: SucKhoeTrang | null, khau: ChiSoSucKhoe['khau'] | null) {
   return { chu: 'Chưa đủ dữ liệu', mau: 'text-on-surface-variant bg-surface-container-highest border-outline-variant' };
 }
 
-/** Tổng quan khối não — sơ đồ 4 AI liền mạch của trang đang chọn, mỗi AI một ô: chức năng · tình trạng · vào xem. */
+/**
+ * TỔNG QUAN TOÀN HỆ THỐNG (chủ dự án 11/10/2026: "phải là tổng quan của toàn bộ hệ thống, không phải chỉ mỗi khối não").
+ * Trên: bảng tổng quan gốc (Dashboard) — số liệu gộp mọi trang người này được xem (server dsTrangMoDuoc).
+ * Dưới: sơ đồ 4 AI của trang đang mở.
+ */
+export function TongQuan() {
+  return (
+    <>
+      <Dashboard />
+      <TongQuanKhoiNao />
+    </>
+  );
+}
+
+/** Sơ đồ 4 AI liền mạch của trang đang chọn, mỗi AI một ô: chức năng · tình trạng · vào xem. */
 export function TongQuanKhoiNao() {
   const { nao, dsNao, loading } = useKhoiNao();
   const [du, setDu] = useState<SucKhoeTrang | null>(null);
@@ -197,7 +212,7 @@ export function TongQuanKhoiNao() {
       <div className="p-8 max-w-3xl">
         <h1 className="text-2xl font-bold text-on-surface mb-2">Chưa có trang bán hàng nào</h1>
         <p className="text-on-surface-variant">
-          {dsNao.length === 0 ? 'Mỗi trang bán hàng có một khối não 4 AI. Lập trang (hoặc nối Fanpage) để bắt đầu.' : 'Chọn một trang ở mục Trang & kênh.'}
+          {dsNao.length === 0 ? 'Mỗi trang bán hàng có một khối não 4 AI. Vào Kết nối kênh để nối Fanpage — trang đầu tiên được lập từ đó.' : 'Chọn một trang ở mục Kết nối kênh.'}
         </p>
       </div>
     );

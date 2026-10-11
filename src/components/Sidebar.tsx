@@ -75,26 +75,30 @@ export default function Sidebar({
    *
    * Chưa có trang nào (vd. chủ chuỗi chưa lập trang) thì không bày khối não rỗng — chỉ phần quản lý.
    */
+  /*
+   * THỨ TỰ MENU (chủ dự án 11/10/2026):
+   *   Tổng quan            ← tổng quan TOÀN HỆ THỐNG (không chỉ một khối não)
+   *   Kết nối kênh         ← luôn đứng TRƯỚC khối não: kênh phải nối trước thì AI mới làm việc được; luôn hiện, kể cả
+   *                          shop mới chưa có trang nào (nối Fanpage là cách có trang đầu tiên)
+   *   Khối não AI: 4 AI    ← không bọc khung riêng, trình bày như các nhóm khác
+   *   Dữ liệu của trang    ← Báo cáo Telegram
+   *   Quản lý              ← Gói dịch vụ, rồi Quản lý tài khoản (quản trị toàn hệ thống) ở CUỐI CÙNG
+   */
   const coNao = !!nao;
+  // Tổng quan thuộc miền ④ Điều hành (xanh ngọc — bảng màu đã thống nhất).
+  const mucTongQuan = { name: 'Tổng quan', icon: 'dashboard', path: '/', mau: BON_AI[3].hex };
+  const mucKetNoi = { name: 'Kết nối kênh', icon: 'cable', path: '/ket-noi' };
   const nhomNao = coNao
-    ? [
-        // Tổng quan khối não thuộc miền ④ Điều hành (xanh ngọc) — src/lib/bon-ai.ts mienTheoDuong.
-        { name: 'Tổng quan khối não', icon: 'hub', path: '/', mau: BON_AI[3].hex },
-        ...BON_AI.map((a) => ({ name: a.ten, icon: a.bieuTuong, path: a.duong, so: a.so, mau: a.hex })),
-      ]
+    ? BON_AI.map((a) => ({ name: a.ten, icon: a.bieuTuong, path: a.duong, so: a.so, mau: a.hex }))
     : [];
   const nhomDuLieu = coNao
-    ? [
-        // Nơi DUY NHẤT quản lý trang bán hàng + kênh (chọn khối não, nối kênh).
-        { name: 'Kết nối kênh', icon: 'cable', path: '/ket-noi' },
-        { name: 'Báo cáo Telegram', icon: 'notifications_active', path: '/telegram' },
-      ]
+    ? [{ name: 'Báo cáo Telegram', icon: 'notifications_active', path: '/telegram' }]
     : [];
   const nhomQuanLy = [
-    // Cùng tên, cùng biểu tượng ở cả hai tầng — một màn hình quản lý dùng chung (chỉ khác phạm vi).
+    { name: 'Gói Dịch Vụ', icon: 'workspace_premium', path: '/pricing' },
+    // Cùng tên, cùng biểu tượng ở cả hai tầng — một màn hình quản lý dùng chung (chỉ khác phạm vi). Đứng cuối cùng.
     ...(laChuChuoi ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/quan-ly-trang' }] : []),
     ...(laQuanTri ? [{ name: 'Quản Lý Tài Khoản', icon: 'manage_accounts', path: '/admin' }] : []),
-    { name: 'Gói Dịch Vụ', icon: 'workspace_premium', path: '/pricing' },
   ];
   const nhan = (chu: string) => (
     <div className="px-3 pb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#E8EDF2]/50">{chu}</div>
@@ -214,13 +218,15 @@ export default function Sidebar({
         </div>
 
         <nav className="flex flex-col min-h-0 overflow-y-auto no-scrollbar">
+          {renderNavGroup([mucTongQuan])}
+          <div style={{ height: '20px', flexShrink: 0 }}></div>
+          {nhan('Kênh bán hàng')}
+          {renderNavGroup([mucKetNoi])}
           {coNao && (
             <>
+              <div style={{ height: '20px', flexShrink: 0 }}></div>
               {nhan('Khối não AI')}
-              {/* Viền bao trọn 4 AI: một khối liền mạch, không tách rời. */}
-              <div className="rounded-2xl border border-white/10 p-1.5 shrink-0" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                {renderNavGroup(nhomNao)}
-              </div>
+              {renderNavGroup(nhomNao)}
               <div style={{ height: '20px', flexShrink: 0 }}></div>
               {nhan('Dữ liệu của trang')}
               {renderNavGroup(nhomDuLieu)}
