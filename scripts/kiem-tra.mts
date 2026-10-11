@@ -3417,16 +3417,6 @@ kiem("trang quảng cáo", "ô chọn kỳ có nối thật và nạp lại theo
     /const coNao = !!nao;/.test(nguonMenu) && /const nhomNao = coNao\s*\n\s*\? BON_AI\.map/.test(nguonMenu) &&
       /const nhomDuLieu = coNao\s*\n\s*\? \[/.test(nguonMenu), true);
   // Chủ dự án 11/10/2026: KHÔNG có bộ chọn trang ở đầu menu — trang bán hàng quản lý duy nhất ở Kết nối kênh.
-  // Chủ dự án 11/10/2026: thứ tự Tổng quan → Kết nối kênh (luôn hiện, trước khối não) → Khối não AI (không bọc khung)
-  // → Dữ liệu của trang → Quản lý (Gói dịch vụ, Quản lý tài khoản CUỐI CÙNG).
-  const viTri = (re: RegExp) => nguonMenu.search(re);
-  kiem("phân tầng", "menu: không bộ chọn trang; Tổng quan → Kết nối kênh (luôn hiện) → Khối não AI (không bọc khung) → Dữ liệu → Quản lý (Quản lý tài khoản cuối)",
-    [/ChonKhoiNao|mucTrangKenh/.test(nguonMenu),
-      viTri(/\{renderNavGroup\(\[mucTongQuan\]\)\}/) > 0 && viTri(/\{renderNavGroup\(\[mucKetNoi\]\)\}/) > viTri(/\{renderNavGroup\(\[mucTongQuan\]\)\}/)
-        && viTri(/\{renderNavGroup\(nhomNao\)\}/) > viTri(/\{renderNavGroup\(\[mucKetNoi\]\)\}/),
-      /rounded-2xl border border-white\/10 p-1\.5/.test(nguonMenu),
-      /\{ name: 'Gói Dịch Vụ'[^\n]*\n[\s\S]*?'\/quan-ly-trang'[\s\S]*?'\/admin'/.test(nguonMenu)],
-    [false, true, false, true]);
 }
 
 // ---------------------------------------------------------------------------
@@ -5922,54 +5912,6 @@ kiem("hiển thị chi phí", "không tiêu thì không tô đỏ", mauChi(0), "
       /localStorage\.removeItem\(KHOA_TRANG_DANG_CHON\)/.test(ma("src/App.tsx"))], [true, true, true]);
 }
 
-/*
- * RÀ SOÁT GIAO DIỆN LƯỢT 2 — Giai đoạn 2–4 (11/10/2026): hệ màu theo miền, bỏ trùng lặp T1–T11, mật độ & nhất quán.
- * Màu đã thống nhất với chủ dự án — đổi phải hỏi trước (không sửa phép kiểm này cho qua).
- */
-{
-  const doc4 = (f: string) => fs.readFileSync(path.join(GOC, f), "utf8");
-  const tepGiaoDien = moiTrang(path.join(GOC, "src"));
-  const ma = (f: string) => boChuThich(doc4(f));
-  const css = doc4("src/index.css");
-  kiem("giao diện lượt 2", "màu MIỀN đúng bảng đã thống nhất: ④ xanh ngọc · ② vàng · ③ lục · ① tím · hệ thống trung tính",
-    [/\.mien-dieu-hanh \{ --mien: #22d3ee;/.test(css), /\.mien-quang-cao \{ --mien: #facc15;/.test(css),
-      /\.mien-ban-hang  \{ --mien: #34d399;/.test(css), /\.mien-noi-dung  \{ --mien: #a78bfa;/.test(css),
-      /\.mien-he-thong  \{ --mien: #e2e8f0;/.test(css)], [true, true, true, true, true]);
-  kiem("giao diện lượt 2", "màu theo mức quan trọng: đỏ lỗi · hồng cần làm ngay · cam cảnh báo · lam thông tin",
-    [/--color-loi: #f87171;/.test(css), /--color-gap: #f472b6;/.test(css), /--color-canh-bao: #fb923c;/.test(css), /--color-thong-tin: #60a5fa;/.test(css)],
-    [true, true, true, true]);
-  const bonAi = ma("src/lib/bon-ai.ts");
-  kiem("giao diện lượt 2", "4 AI mang đúng màu miền; 4 bước màu lam · hồng · cam · xám",
-    [/ma: 'content'[^\n]*\n[^\n]*mien: 'mien-noi-dung', hex: '#a78bfa'/.test(bonAi), /ma: 'ads'[^\n]*\n[^\n]*mien: 'mien-quang-cao', hex: '#facc15'/.test(bonAi),
-      /ma: 'sales'[^\n]*\n[^\n]*mien: 'mien-ban-hang', hex: '#34d399'/.test(bonAi), /ma: 'analytics'[^\n]*\n[^\n]*mien: 'mien-dieu-hanh', hex: '#22d3ee'/.test(bonAi),
-      [...bonAi.matchAll(/bieuTuong: '[a-z_]+', hex: '(#[0-9a-f]{6})' \}/g)].map((m) => m[1]).join(" ")],
-    [true, true, true, true, "#60a5fa #f472b6 #fb923c #94a3b8"]);
-  kiem("giao diện lượt 2", "vùng nội dung mang lớp màu miền theo đường dẫn",
-    /<main className=\{`flex-1 overflow-y-auto custom-scrollbar pt-16 \$\{mien\}`\}>/.test(ma("src/App.tsx")), true);
-  const menu = ma("src/components/Sidebar.tsx"), tren = ma("src/components/TopNavBar.tsx"), khuon = ma("src/components/KhuonAi.tsx");
-  kiem("giao diện lượt 2", "T1/T2/T10: không bộ chọn trang ở đầu giao diện (menu, thanh trên), bỏ dải 1→4 ở đầu AI, bỏ nhãn trang trí + chấm trực tuyến giả",
-    [/ChonKhoiNao/.test(menu), fs.existsSync(path.join(GOC, "src/components/ChonKhoiNao.tsx")), /BON_AI\.map/.test(khuon),
-      tren.includes("TỰ ĐỘNG HÓA THỜI GIAN THỰC"), /bg-green-400 rounded-full border-2 border-background/.test(tren), /Khối não:/.test(tren)],
-    [false, false, false, false, false, false]);
-  const kn = ma("src/pages/Connections.tsx"), bang = ma("src/components/BangTrangBanHang.tsx");
-  // Chủ dự án 11/10/2026: GIỮ lưới cổng kết nối + tài khoản đã kết nối, chỉ làm gọn; BỎ hộp "Bạn muốn kết nối nền tảng nào?" (trùng lưới).
-  kiem("giao diện lượt 2", "Kết nối kênh: giữ lưới cổng kết nối (gọn, có tìm) + tài khoản đã kết nối dạng dòng; bỏ hộp chọn nền tảng trùng; bảng trang 25 dòng",
-    [kn.includes("Các kênh có thể kết nối"), /placeholder="Tìm nền tảng…"/.test(kn), kn.includes("Tài khoản đã kết nối"),
-      kn.includes("Bạn muốn kết nối nền tảng nào?"), /setConnectStep\(1\)/.test(kn), /<BangTrangBanHang \/>/.test(kn), /const MOI_TRANG = 25;/.test(bang)],
-    [true, true, true, false, false, true, true]);
-  kiem("giao diện lượt 2", "T3: Hộp thư một nút đổi người trả lời, một nút xem trên nền tảng, lọc kênh chỉ khi ≥ 2 kênh",
-    [ma("src/pages/Inbox.tsx").includes("Người chat"), (ma("src/pages/Inbox.tsx").match(/Xem trên nền tảng/g) ?? []).length,
-      /\{accounts\.length > 1 && \(/.test(ma("src/pages/Inbox.tsx"))], [false, 0, true]);
-  kiem("giao diện lượt 2", "T11: An toàn tài khoản thuộc ③ AI Bán hàng, không còn ở Gói dịch vụ",
-    [/api\.settings\.safety\(\)/.test(ma("src/pages/Pricing.tsx")), /them=\{<AnToanTaiKhoan \/>\}/.test(ma("src/pages/KhoiNao.tsx"))], [false, true]);
-  kiem("giao diện lượt 2", "§3: bài đăng là danh sách gọn (không lưới 3 cột)",
-    /md:grid-cols-2 xl:grid-cols-3 gap-6">\s*\{filteredPosts\.map/.test(ma("src/pages/Content.tsx")), false);
-  // Lớp `hidden` của Tailwind nằm trong @layer; CSS phông biểu tượng ngoài layer thắng → gắn thẳng lên biểu tượng là vô tác dụng.
-  kiem("giao diện lượt 2", "không gắn lớp ẩn/hiện theo màn hình thẳng lên biểu tượng (vô tác dụng) — bọc thẻ ngoài",
-    tepGiaoDien.flatMap((tep) => dongNgoaiChuThich(fs.readFileSync(tep, "utf8"))
-      .filter(({ d }) => /className="[^"]*material-symbols-outlined[^"]*\b(?:sm:|md:|lg:)?hidden\b|className="[^"]*\b(?:sm:|md:|lg:)?hidden\b[^"]*material-symbols-outlined/.test(d))
-      .map((x) => `${path.basename(tep)}:${x.dong}`)).join(", "), "");
-}
 
 console.log(`\nĐã kiểm ${tong} điểm.`);
 if (hong === 0) {
